@@ -1,0 +1,519 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+generator web_client {
+  provider = "prisma-client-js"
+  output   = "../../web/lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  SOLD
+  RESERVED
+  LAUNCH
+}
+
+enum PropertyCategory {
+  LOTEAMENTO
+  TERRENO
+  CASA
+  APARTAMENTO
+  COMERCIAL
+  RURAL
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  WAITING_RETURN
+  VISITED_PROPERTY
+  PROPOSAL_SENT
+  NEGOTIATION
+  CLOSED
+  LOST
+}
+
+enum PropertyReviewStatus {
+  APPROVED
+  PENDING
+  REJECTED
+}
+
+enum BlogArticleQueueStatus {
+  PENDING
+  GENERATED
+  PUBLISHED
+  FAILED
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum SmtpEncryption {
+  SSL
+  TLS
+  NONE
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  name                String?
+  email               String?              @unique
+  emailVerified       DateTime?
+  image               String?
+  passwordHash        String?
+  whatsapp            String?
+  cpf                 String?              @unique
+  address             String?
+  role                Role                 @default(USER)
+  accounts            Account[]
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([role])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt, used])
+}
+
+model Property {
+  id                         String                        @id @default(cuid())
+  title                      String
+  slug                       String                        @unique
+  shortDescription           String
+  fullDescription            String
+  price                      Decimal                       @db.Decimal(14, 2)
+  promotionalPrice           Decimal?                      @db.Decimal(14, 2)
+  status                     PropertyStatus                @default(AVAILABLE)
+  propertyCode               String                        @unique
+  area                       Int
+  landArea                   Int?
+  builtArea                  Int?
+  bedrooms                   Int?
+  bathrooms                  Int?
+  suites                     Int?
+  garage                     Int?
+  floor                      Int?
+  hasElevator                Boolean                       @default(false)
+  solarPosition              String?
+  hasEdicule                 Boolean                       @default(false)
+  ediculeArea                Int?
+  ediculeBedrooms            Int?
+  ediculeBathrooms           Int?
+  ediculeHasLivingRoom       Boolean                       @default(false)
+  ediculeHasKitchen          Boolean                       @default(false)
+  acceptsBankFinancing       Boolean                       @default(false)
+  acceptsFgts                Boolean                       @default(false)
+  acceptsCar                 Boolean                       @default(false)
+  acceptsExchange            Boolean                       @default(false)
+  acceptsProposal            Boolean                       @default(false)
+  acceptsDirectInstallments  Boolean                       @default(false)
+  maxDirectInstallments      Int?
+  constructionYear           Int?
+  landFrontage               Float?
+  landDepthLeft              Float?
+  landDepthRight             Float?
+  hasPaving                  Boolean                       @default(false)
+  hasElectricity             Boolean                       @default(false)
+  hasWaterNetwork            Boolean                       @default(false)
+  city                       String
+  district                   String
+  state                      String
+  category                   PropertyCategory
+  type                       String
+  lotsMinArea                Int?
+  lotsMaxArea                Int?
+  lotsQuantity               Int?
+  developmentInfrastructure  String?
+  developmentHasPaving       Boolean                       @default(false)
+  developmentHasElectricity  Boolean                       @default(false)
+  developmentHasWaterNetwork Boolean                       @default(false)
+  readyToBuild               Boolean                       @default(false)
+  hasDevelopmentInstallments Boolean                       @default(false)
+  developmentMaxInstallments Int?
+  featured                   Boolean                       @default(false)
+  launch                     Boolean                       @default(false)
+  approved                   Boolean                       @default(true)
+  reviewStatus               PropertyReviewStatus          @default(APPROVED)
+  submittedByOwner           Boolean                       @default(false)
+  ownerName                  String?
+  ownerPhone                 String?
+  ownerEmail                 String?
+  googleMapsLink             String?
+  latitude                   Float?
+  longitude                  Float?
+  youtubeLink                String?
+  coverImage                 String
+  pdfTableUrl                String?
+  pdfProjectUrl              String?
+  viewCount                  Int                           @default(0)
+  images                     PropertyImage[]
+  leads                      Lead[]
+  views                      PropertyView[]
+  analyticsDaily             PropertyAnalyticsDaily[]
+  analyticsVisitorDays       PropertyAnalyticsVisitorDay[]
+  createdAt                  DateTime                      @default(now())
+  updatedAt                  DateTime                      @updatedAt
+
+  @@index([city, district])
+  @@index([state, city, district])
+  @@index([category, status, featured])
+  @@index([approved, launch, featured])
+  @@index([price])
+  @@index([createdAt])
+}
+
+model PropertyImage {
+  id         String   @id @default(cuid())
+  propertyId String
+  url        String
+  alt        String?
+  sortOrder  Int      @default(0)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, sortOrder])
+}
+
+model PropertyView {
+  id         String   @id @default(cuid())
+  propertyId String
+  visitorKey String
+  createdAt  DateTime @default(now())
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, visitorKey])
+  @@index([propertyId, createdAt])
+}
+
+model Post {
+  id         String   @id @default(cuid())
+  title      String
+  slug       String   @unique
+  excerpt    String
+  content    String
+  coverImage String
+  category   String
+  author     String   @default("Equipe Munay Imóveis")
+  published  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([published, createdAt])
+  @@index([category])
+}
+
+model Testimonial {
+  id           String   @id @default(cuid())
+  name         String
+  photoUrl     String
+  text         String
+  rating       Int
+  youtubeVideo String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+model Lead {
+  id            String     @id @default(cuid())
+  name          String
+  phone         String
+  email         String?
+  message       String?
+  source        String?
+  pageOrigin    String?
+  propertyId    String?
+  propertyCode  String?
+  propertyTitle String?
+  propertyCity  String?
+  interest      String?
+  status        LeadStatus @default(NEW)
+  assignedTo    String?
+  internalNote  String?
+  nextContactAt DateTime?
+  consent       Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  property      Property?  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([status, nextContactAt])
+  @@index([nextContactAt, createdAt])
+  @@index([propertyId, createdAt])
+}
+
+model BlogAutomationSettings {
+  id              String   @id @default(cuid())
+  enabled         Boolean  @default(false)
+  provider        String   @default("OPENAI")
+  apiKey          String?  @db.Text
+  publishTime     String   @default("09:00")
+  articlesPerDay  Int      @default(1)
+  defaultAuthor   String   @default("Equipe Munay Imóveis")
+  defaultCategory String   @default("Mercado imobiliário")
+  autoPublish     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model BlogArticleQueue {
+  id             String                 @id @default(cuid())
+  title          String
+  slug           String                 @unique
+  content        String                 @db.Text
+  excerpt        String                 @db.Text
+  seoTitle       String
+  seoDescription String                 @db.Text
+  category       String
+  tags           String[]               @default([])
+  status         BlogArticleQueueStatus @default(PENDING)
+  scheduledAt    DateTime?
+  publishedAt    DateTime?
+  createdAt      DateTime               @default(now())
+
+  @@index([status, createdAt])
+  @@index([status, scheduledAt])
+  @@index([scheduledAt])
+  @@index([publishedAt])
+  @@index([category, createdAt])
+}
+
+model SiteSetting {
+  id                     String         @id @default(cuid())
+  brandName              String         @default("Munay Imóveis")
+  primaryColor           String         @default("#102a1f")
+  secondaryColor         String         @default("#d4af72")
+  accentColor            String         @default("#f6f2e8")
+  heroTitle              String         @default("Invista em terrenos com alto potencial de valorização")
+  heroSubtitle           String         @default("Empreendimentos premium, imóveis selecionados e atendimento consultivo para quem busca patrimônio com inteligência.")
+  heroVideoUrl           String         @default("https://www.youtube.com/embed/mfNsrZJiQkg?autoplay=1&mute=1&controls=0&loop=1&playlist=mfNsrZJiQkg")
+  homeVideoStatus        String         @default("INACTIVE")
+  homeVideoUrl           String?
+  homeVideoTitle         String         @default("")
+  homeVideoDescription   String         @default("")
+  homeVideoThumbnailUrl  String?
+  homeVideoOrder         Int            @default(1)
+  homeVideoAutoplay      Boolean        @default(true)
+  homeVideoMaskEnabled   Boolean        @default(true)
+  whatsappNumber         String         @default("5548991702077")
+  creci                  String         @default("CRECI 33928-F")
+  cnpj                   String         @default("")
+  address                String         @default("Atendimento com hora marcada")
+  phone                  String         @default("(48) 99170-2077")
+  instagram              String         @default("https://instagram.com/corretor_icaro_munay")
+  privacyUrl             String         @default("/politica-de-privacidade")
+  smtpSenderName         String         @default("Munay Imóveis")
+  smtpSenderEmail        String?
+  smtpHost               String?
+  smtpPort               Int            @default(465)
+  smtpEncryption         SmtpEncryption @default(SSL)
+  smtpUsername           String?
+  smtpPasswordEncrypted  String?        @db.Text
+  smtpTimeout            Int            @default(10000)
+  smtpPasswordUpdatedAt  DateTime?
+  googleTagManagerId     String?
+  ga4MeasurementId       String?
+  googleSiteVerification String?
+  metaPixelId            String?
+  metaDomainVerification String?
+  microsoftClarityId     String?
+  bingSiteVerification   String?
+  tiktokPixelId          String?
+  linkedInPartnerId      String?
+  pinterestTagId         String?
+  customHeadCode         String?        @db.Text
+  customBodyCode         String?        @db.Text
+  customFooterCode       String?        @db.Text
+  indexNowKey            String?        @default("munay-indexnow-key")
+  activeThemeLayoutId    String?
+  previousThemeLayoutId  String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  subject   String
+  htmlBody  String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ThemeLayout {
+  id          String                         @id @default(cuid())
+  name        String
+  slug        String                         @unique
+  description String?
+  isActive    Boolean                        @default(false)
+  isDefault   Boolean                        @default(false)
+  blocks      ThemeLayoutBlock[]
+  history     ThemeLayoutActivationHistory[]
+  createdAt   DateTime                       @default(now())
+  updatedAt   DateTime                       @updatedAt
+
+  @@index([isActive, createdAt])
+  @@index([isDefault, createdAt])
+}
+
+model ThemeLayoutBlock {
+  id            String      @id @default(cuid())
+  themeLayoutId String
+  blockKey      String
+  blockName     String
+  settingsJson  Json
+  sortOrder     Int         @default(0)
+  themeLayout   ThemeLayout @relation(fields: [themeLayoutId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([themeLayoutId, blockKey])
+  @@index([themeLayoutId, sortOrder])
+}
+
+model ThemeLayoutActivationHistory {
+  id                 String      @id @default(cuid())
+  themeLayoutId      String
+  layoutNameSnapshot String
+  action             String      @default("ACTIVATE")
+  activatedAt        DateTime    @default(now())
+  themeLayout        ThemeLayout @relation(fields: [themeLayoutId], references: [id], onDelete: Cascade)
+  createdAt          DateTime    @default(now())
+
+  @@index([themeLayoutId, activatedAt])
+  @@index([activatedAt])
+}
+
+model Redirect {
+  id          String   @id @default(cuid())
+  sourcePath  String   @unique
+  destination String
+  type        Int      @default(301)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active, sourcePath])
+}
+
+model HomeAnalyticsDaily {
+  id             String   @id @default(cuid())
+  date           DateTime @unique @db.Date
+  homeVisits     Int      @default(0)
+  homeVideoPlays Int      @default(0)
+  watched25      Int      @default(0)
+  watched50      Int      @default(0)
+  watched75      Int      @default(0)
+  watched100     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([date])
+}
+
+model HomeAnalyticsVisitorDay {
+  id                String   @id @default(cuid())
+  visitorKey        String
+  date              DateTime @db.Date
+  visited           Boolean  @default(false)
+  videoPlayTracked  Boolean  @default(false)
+  watched25Tracked  Boolean  @default(false)
+  watched50Tracked  Boolean  @default(false)
+  watched75Tracked  Boolean  @default(false)
+  watched100Tracked Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([visitorKey, date])
+  @@index([date])
+}
+
+model PropertyAnalyticsDaily {
+  id                  String    @id @default(cuid())
+  propertyId          String
+  date                DateTime  @db.Date
+  propertyViews       Int       @default(0)
+  whatsappClicks      Int       @default(0)
+  scheduleVisitClicks Int       @default(0)
+  lastViewedAt        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  property            Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, date])
+  @@index([date])
+  @@index([propertyId, date])
+}
+
+model PropertyAnalyticsVisitorDay {
+  id         String   @id @default(cuid())
+  propertyId String
+  visitorKey String
+  date       DateTime @db.Date
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, visitorKey, date])
+  @@index([date])
+  @@index([propertyId, date])
+}

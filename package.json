@@ -1,0 +1,29 @@
+{
+  "name": "portal-imobiliario-premium",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:api": "npm --workspace apps/api run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "build:api": "npm --workspace apps/api run build",
+    "typecheck:web": "npm --workspace apps/web run build -- --no-lint",
+    "typecheck:api": "npm --workspace apps/api run build",
+    "lint": "npm --workspace apps/web run lint",
+    "prisma:generate": "npm --workspace apps/api run prisma:generate",
+    "prisma:migrate": "npm --workspace apps/api run prisma:migrate",
+    "seed": "npm --workspace apps/api run seed",
+    "build": "npm run build:api && npm run build:web"
+  },
+  "overrides": {
+    "@prisma/client": "5.22.0",
+    "prisma": "5.22.0",
+    "@prisma/engines": "5.22.0",
+    "@prisma/debug": "5.22.0",
+    "@prisma/fetch-engine": "5.22.0",
+    "@prisma/get-platform": "5.22.0"
+  }
+}
