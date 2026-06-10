@@ -6,14 +6,29 @@ import { makeSlug } from '../utils/slug.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/app-error.js';
 import { notifyIndexNowPath } from '../utils/indexnow.js';
+import { getRichTextPlainText, sanitizeRichTextHtml } from '../utils/rich-text.js';
 
 const router = Router();
+
+const coverImageSchema = z
+  .string()
+  .trim()
+  .refine((value) => {
+    if (value.startsWith('/uploads/')) return true;
+
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }, 'Imagem de capa inválida.');
 
 const postSchema = z.object({
   title: z.string().trim().min(3),
   excerpt: z.string().trim().min(10),
   content: z.string().trim().min(20),
-  coverImage: z.string().trim().url(),
+  coverImage: coverImageSchema,
   category: z.string().trim().min(2),
   author: z.string().trim().min(2).default('Equipe Munay Imóveis'),
   published: z.boolean().default(true)
@@ -134,9 +149,17 @@ router.post(
       throw new AppError(400, 'Dados inválidos.', parsed.error.flatten());
     }
 
+    const sanitizedContent = sanitizeRichTextHtml(parsed.data.content);
+
+    if (getRichTextPlainText(sanitizedContent).length < 20) {
+      throw new AppError(400, 'Conteúdo do artigo muito curto ou inválido.');
+    }
+
     const created = await prisma.post.create({
       data: {
         ...parsed.data,
+        content: sanitizedContent,
+        coverImage: parsed.data.coverImage.trim(),
         slug: await resolveUniquePostSlug(parsed.data.title)
       }
     });
@@ -160,10 +183,18 @@ router.put(
       throw new AppError(400, 'Dados inválidos.', parsed.error.flatten());
     }
 
+    const sanitizedContent = sanitizeRichTextHtml(parsed.data.content);
+
+    if (getRichTextPlainText(sanitizedContent).length < 20) {
+      throw new AppError(400, 'Conteúdo do artigo muito curto ou inválido.');
+    }
+
     const updated = await prisma.post.update({
       where: { id: String(req.params.id) },
       data: {
         ...parsed.data,
+        content: sanitizedContent,
+        coverImage: parsed.data.coverImage.trim(),
         slug: await resolveUniquePostSlug(parsed.data.title, String(req.params.id))
       }
     });

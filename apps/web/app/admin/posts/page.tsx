@@ -1,11 +1,24 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Copy, Eye, FilePlus2, PencilLine, Save, Search, Trash2 } from 'lucide-react';
+import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
+import {
+  CalendarDays,
+  Copy,
+  Eye,
+  FilePlus2,
+  ImagePlus,
+  Loader2,
+  PencilLine,
+  Save,
+  Search,
+  Trash2,
+  UploadCloud
+} from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { RichTextContent } from '@/components/content/RichTextContent';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { adminFetch } from '@/lib/admin';
+import { prepareAndUploadAdminImage } from '@/lib/admin-media';
 import { Post } from '@/lib/types';
 
 type PostEditorForm = {
@@ -114,6 +127,7 @@ export default function AdminPostsPage() {
   const [tab, setTab] = useState<EditorTab>('visual');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -139,9 +153,7 @@ export default function AdminPostsPage() {
       setDrafts((current) => {
         const nextDrafts = { ...current };
         nextItems.forEach((item) => {
-          if (!nextDrafts[item.id]) {
-            nextDrafts[item.id] = toForm(item);
-          }
+          nextDrafts[item.id] = nextDrafts[item.id] || toForm(item);
         });
         if (!nextDrafts.new) nextDrafts.new = emptyForm;
         return nextDrafts;
@@ -205,6 +217,28 @@ export default function AdminPostsPage() {
       [activeKey]: activeKey === 'new' ? emptyForm : savedForms[activeKey] || emptyForm
     }));
     setMessage('Alterações descartadas.');
+  }
+
+  async function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      setUploadingCover(true);
+      setError('');
+      setMessage('');
+      const uploaded = await prepareAndUploadAdminImage(file, 'blog-cover');
+      updateActiveForm({ coverImage: uploaded.url });
+      setMessage('Imagem de capa enviada com sucesso.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível enviar a imagem de capa.');
+    } finally {
+      setUploadingCover(false);
+    }
   }
 
   async function saveCurrent() {
@@ -279,7 +313,7 @@ export default function AdminPostsPage() {
         return next;
       });
       setActiveKey((current) => (current === id ? 'new' : current));
-      setMessage('Artigo excluído.');
+      setMessage('Artigo excluído e listagem atualizada.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível excluir o artigo.');
     }
@@ -288,14 +322,14 @@ export default function AdminPostsPage() {
   const filteredItems = useMemo(() => {
     const normalized = search.trim().toLowerCase();
     if (!normalized) return items;
-    return items.filter((item) => `${item.title} ${item.category} ${item.author}`.toLowerCase().includes(normalized));
+    return items.filter((item) => `${item.title} ${item.slug} ${item.category} ${item.author}`.toLowerCase().includes(normalized));
   }, [items, search]);
 
   return (
     <AdminShell title="Gerenciar blog • Editor profissional">
       <PostPreviewModal open={previewOpen} form={activeForm} onClose={() => setPreviewOpen(false)} />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(320px,30%)_minmax(0,1fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(340px,32%)_minmax(0,1fr)]">
         <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
           <section className="card-premium p-5">
             <div className="flex items-center justify-between gap-3">
@@ -313,7 +347,7 @@ export default function AdminPostsPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar artigo por título, categoria ou autor"
+                placeholder="Buscar por título, slug, categoria ou autor"
                 className="w-full rounded-2xl border border-white/10 bg-white/5 py-3 pl-11 pr-4 text-white outline-none"
               />
             </div>
@@ -335,59 +369,88 @@ export default function AdminPostsPage() {
                   <article
                     key={item.id}
                     onClick={() => selectPost(item.id)}
-                    className={`card-premium cursor-pointer p-4 transition ${selected ? 'border-brand-gold/40 ring-1 ring-brand-gold/30' : 'hover:border-white/20'}`}
+                    className={`card-premium cursor-pointer overflow-hidden p-0 transition ${selected ? 'border-brand-gold/40 ring-1 ring-brand-gold/30' : 'hover:border-white/20'}`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-base font-semibold text-white">{item.title}</p>
-                          {itemDirty ? <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-amber-200">Não salvo</span> : null}
+                    <div className="grid gap-0 sm:grid-cols-[120px_minmax(0,1fr)]">
+                      <div className="h-full min-h-[120px] bg-white/5">
+                        {item.coverImage ? <img src={item.coverImage} alt={item.title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-zinc-500">Sem capa</div>}
+                      </div>
+
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-base font-semibold text-white">{item.title}</p>
+                              {itemDirty ? <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-amber-200">Não salvo</span> : null}
+                            </div>
+                            <p className="mt-2 truncate text-xs uppercase tracking-[0.22em] text-zinc-500">/{item.slug}</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.24em] text-zinc-500">
+                              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">{item.category}</span>
+                              <span className={`rounded-full border px-2.5 py-1 ${item.published ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
+                                {item.published ? 'Publicado' : 'Rascunho'}
+                              </span>
+                              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">{item.author || 'Sem autor'}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              selectPost(item.id);
+                            }}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-zinc-300"
+                            title="Editar artigo"
+                          >
+                            <PencilLine size={15} />
+                          </button>
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.24em] text-zinc-500">
-                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">{item.category}</span>
-                          <span className={`rounded-full border px-2.5 py-1 ${item.published ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
-                            {item.published ? 'Publicado' : 'Rascunho'}
-                          </span>
+
+                        <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400">
+                          <CalendarDays size={14} className="text-brand-gold" />
+                          {formatDate(item.updatedAt || item.createdAt)}
+                        </div>
+
+                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-zinc-300">{item.excerpt}</p>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              selectPost(item.id);
+                            }}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs text-white"
+                          >
+                            <PencilLine size={14} /> Editar
+                          </button>
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              selectPost(item.id);
+                              setPreviewOpen(true);
+                            }}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs text-white"
+                          >
+                            <Eye size={14} /> Visualizar
+                          </button>
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void duplicatePost(item.id);
+                            }}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs text-white"
+                          >
+                            <Copy size={14} /> Duplicar
+                          </button>
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void remove(item.id);
+                            }}
+                            className="inline-flex items-center gap-2 rounded-full border border-rose-500/25 px-3 py-2 text-xs text-rose-200"
+                          >
+                            <Trash2 size={14} /> Excluir
+                          </button>
                         </div>
                       </div>
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          selectPost(item.id);
-                        }}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-zinc-300"
-                        title="Editar artigo"
-                      >
-                        <PencilLine size={15} />
-                      </button>
-                    </div>
-
-                    <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400">
-                      <CalendarDays size={14} className="text-brand-gold" />
-                      {formatDate(item.updatedAt || item.createdAt)}
-                    </div>
-
-                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-zinc-300">{item.excerpt}</p>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void duplicatePost(item.id);
-                        }}
-                        className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs text-white"
-                      >
-                        <Copy size={14} /> Duplicar
-                      </button>
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void remove(item.id);
-                        }}
-                        className="inline-flex items-center gap-2 rounded-full border border-rose-500/25 px-3 py-2 text-xs text-rose-200"
-                      >
-                        <Trash2 size={14} /> Excluir
-                      </button>
                     </div>
                   </article>
                 );
@@ -408,7 +471,7 @@ export default function AdminPostsPage() {
                 <p className="text-xs uppercase tracking-[0.32em] text-brand-gold">Workspace editorial</p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">{activeKey === 'new' ? 'Novo artigo' : activeForm.title || 'Edição de artigo'}</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-                  Interface reestruturada para escrita longa, colagem de HTML puro, preview real e edição instantânea sem recarregar a página.
+                  Painel completo com listagem, edição, exclusão, imagem de capa local, imagens dentro do conteúdo e preview em tempo real.
                 </p>
               </div>
 
@@ -424,13 +487,13 @@ export default function AdminPostsPage() {
                 <button onClick={discardChanges} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white">
                   Descartar alterações
                 </button>
-                <button onClick={() => void saveCurrent()} disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-[#08110d] disabled:opacity-60">
-                  <Save size={15} /> {saving ? 'Salvando...' : activeKey === 'new' ? 'Salvar artigo' : 'Atualizar artigo'}
+                <button onClick={() => void saveCurrent()} disabled={saving || uploadingCover} className="inline-flex items-center gap-2 rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-[#08110d] disabled:opacity-60">
+                  {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} {saving ? 'Salvando...' : activeKey === 'new' ? 'Salvar artigo' : 'Atualizar artigo'}
                 </button>
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_320px]">
+            <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_340px]">
               <div className="space-y-4">
                 <input
                   placeholder="Título do artigo"
@@ -457,8 +520,20 @@ export default function AdminPostsPage() {
                   <input value={activeForm.author} onChange={(event) => updateActiveForm({ author: event.target.value })} className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08110d] px-4 py-3 text-white outline-none" />
                 </div>
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Imagem de capa</p>
-                  <input value={activeForm.coverImage} onChange={(event) => updateActiveForm({ coverImage: event.target.value })} placeholder="https://..." className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08110d] px-4 py-3 text-white outline-none" />
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Imagem de capa</p>
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-gold/35">
+                      {uploadingCover ? <Loader2 size={13} className="animate-spin" /> : <UploadCloud size={13} />}
+                      Selecionar imagem
+                      <input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={handleCoverImageChange} />
+                    </label>
+                  </div>
+                  <input value={activeForm.coverImage} onChange={(event) => updateActiveForm({ coverImage: event.target.value })} placeholder="/uploads/blog-cover/... ou URL externa" className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08110d] px-4 py-3 text-white outline-none" />
+                  {activeForm.coverImage ? (
+                    <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                      <img src={activeForm.coverImage} alt={activeForm.title || 'Imagem de capa'} className="h-40 w-full object-cover" />
+                    </div>
+                  ) : null}
                 </div>
                 <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#08110d] px-4 py-3 text-sm text-zinc-200">
                   <input type="checkbox" checked={activeForm.published} onChange={(event) => updateActiveForm({ published: event.target.checked })} />
@@ -466,7 +541,9 @@ export default function AdminPostsPage() {
                 </label>
                 <div className="rounded-2xl border border-white/10 bg-[#08110d] px-4 py-3 text-xs uppercase tracking-[0.22em] text-zinc-500">
                   {isDirty ? 'Alterações não salvas' : 'Tudo sincronizado'}
-                  {activePost ? <span className="mt-2 block normal-case tracking-normal text-zinc-400">Última atualização: {formatDate(activePost.updatedAt || activePost.createdAt)}</span> : null}
+                  {activePost ? (
+                    <span className="mt-2 block normal-case tracking-normal text-zinc-400">Última atualização: {formatDate(activePost.updatedAt || activePost.createdAt)}</span>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -486,7 +563,7 @@ export default function AdminPostsPage() {
                   HTML
                 </button>
                 <p className="ml-auto text-xs uppercase tracking-[0.24em] text-zinc-500">
-                  {tab === 'visual' ? 'Editor visual estilo portal/WordPress' : 'Cole HTML pronto gerado pelo ChatGPT'}
+                  {tab === 'visual' ? 'Editor estável com upload local de imagens' : 'Cole HTML pronto gerado pelo ChatGPT'}
                 </p>
               </div>
 
@@ -494,7 +571,8 @@ export default function AdminPostsPage() {
                 {tab === 'visual' ? (
                   <RichTextEditor
                     value={activeForm.content}
-                    onChange={(value) => updateActiveForm({ content: value })}
+                    onChange={(nextValue) => updateActiveForm({ content: nextValue })}
+                    onUploadImage={(file) => prepareAndUploadAdminImage(file, 'editor')}
                     placeholder="Escreva o artigo com títulos, subtítulos, citações, botões, imagens, tabelas e destaques."
                   />
                 ) : (

@@ -27,6 +27,7 @@ export type AdminSmtpSettingsResponse = {
   hasPassword: boolean;
   passwordMasked: string;
   passwordUpdatedAt: string | null;
+  passwordWarning?: string | null;
   updatedAt: string | null;
 };
 
@@ -70,6 +71,7 @@ const DEFAULT_SMTP_SETTINGS: AdminSmtpSettingsResponse = {
   hasPassword: false,
   passwordMasked: '',
   passwordUpdatedAt: null,
+  passwordWarning: null,
   updatedAt: null
 };
 
@@ -126,6 +128,34 @@ function sanitizeHeaderValue(value: string) {
   return normalizeString(value).replace(/[\r\n]+/g, ' ');
 }
 
+function getInvalidStoredPasswordMessage() {
+  return 'A senha SMTP cadastrada anteriormente não pôde ser validada. Salve uma nova senha no painel para reativar os envios e a recuperação de senha.';
+}
+
+function inspectStoredPassword(encryptedPassword: string | null | undefined) {
+  const normalized = normalizeString(encryptedPassword);
+
+  if (!normalized) {
+    return {
+      hasPassword: false,
+      warning: null as string | null
+    };
+  }
+
+  try {
+    decryptSecret(normalized);
+    return {
+      hasPassword: true,
+      warning: null as string | null
+    };
+  } catch {
+    return {
+      hasPassword: true,
+      warning: getInvalidStoredPasswordMessage()
+    };
+  }
+}
+
 async function ensureSiteSettings() {
   const existing = await prisma.siteSetting.findFirst();
   if (existing) return existing;
@@ -177,16 +207,20 @@ async function loadRuntimeSmtpSettings(): Promise<RuntimeSmtpSettings> {
     throw new Error('As configurações SMTP ainda não foram concluídas no painel administrativo.');
   }
 
-  return {
-    senderName,
-    senderEmail,
-    host,
-    port: Number(settings.smtpPort || DEFAULT_SMTP_SETTINGS.port),
-    encryption: (settings.smtpEncryption as SmtpEncryptionMode | null) || DEFAULT_SMTP_SETTINGS.encryption,
-    username,
-    password: decryptSecret(encryptedPassword),
-    timeout: Number(settings.smtpTimeout || DEFAULT_SMTP_SETTINGS.timeout)
-  };
+  try {
+    return {
+      senderName,
+      senderEmail,
+      host,
+      port: Number(settings.smtpPort || DEFAULT_SMTP_SETTINGS.port),
+      encryption: (settings.smtpEncryption as SmtpEncryptionMode | null) || DEFAULT_SMTP_SETTINGS.encryption,
+      username,
+      password: decryptSecret(encryptedPassword),
+      timeout: Number(settings.smtpTimeout || DEFAULT_SMTP_SETTINGS.timeout)
+    };
+  } catch {
+    throw new Error(getInvalidStoredPasswordMessage());
+  }
 }
 
 function renderTemplate(htmlBody: string, variables: TemplateVariables) {
@@ -197,6 +231,8 @@ function renderTemplate(htmlBody: string, variables: TemplateVariables) {
 }
 
 function toAdminSettingsResponse(settings: Awaited<ReturnType<typeof ensureSiteSettings>>): AdminSmtpSettingsResponse {
+  const passwordState = inspectStoredPassword(settings.smtpPasswordEncrypted);
+
   return {
     senderName: settings.smtpSenderName || DEFAULT_SMTP_SETTINGS.senderName,
     senderEmail: settings.smtpSenderEmail || DEFAULT_SMTP_SETTINGS.senderEmail,
@@ -205,9 +241,10 @@ function toAdminSettingsResponse(settings: Awaited<ReturnType<typeof ensureSiteS
     encryption: (settings.smtpEncryption as SmtpEncryptionMode | null) || DEFAULT_SMTP_SETTINGS.encryption,
     username: settings.smtpUsername || DEFAULT_SMTP_SETTINGS.username,
     timeout: settings.smtpTimeout || DEFAULT_SMTP_SETTINGS.timeout,
-    hasPassword: Boolean(settings.smtpPasswordEncrypted),
-    passwordMasked: settings.smtpPasswordEncrypted ? SMTP_PASSWORD_MASK : '',
+    hasPassword: passwordState.hasPassword,
+    passwordMasked: passwordState.hasPassword ? SMTP_PASSWORD_MASK : '',
     passwordUpdatedAt: settings.smtpPasswordUpdatedAt ? settings.smtpPasswordUpdatedAt.toISOString() : null,
+    passwordWarning: passwordState.warning,
     updatedAt: settings.updatedAt ? settings.updatedAt.toISOString() : null
   };
 }
@@ -220,9 +257,14 @@ export async function getAdminSmtpSettings() {
 export async function saveAdminSmtpSettings(payload: AdminSmtpSettingsPayload) {
   const current = await ensureSiteSettings();
   const nextPassword = normalizeString(payload.password);
+  const currentPasswordState = inspectStoredPassword(current.smtpPasswordEncrypted);
 
   if (!current.smtpPasswordEncrypted && !nextPassword) {
     throw new Error('Informe a senha SMTP para concluir a configuração inicial.');
+  }
+
+  if (currentPasswordState.warning && !nextPassword) {
+    throw new Error(getInvalidStoredPasswordMessage());
   }
 
   const updated = await prisma.siteSetting.update({

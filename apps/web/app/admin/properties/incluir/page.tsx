@@ -20,6 +20,7 @@ import {
 import { AdminShell } from '@/components/admin/AdminShell';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { adminFetch } from '@/lib/admin';
+import { prepareAndUploadAdminImage } from '@/lib/admin-media';
 import { prepareImageFile, PreparedImage } from '@/lib/image-upload';
 import { Property } from '@/lib/types';
 import { categoryLabel, formatCurrency, statusLabel } from '@/lib/format';
@@ -814,7 +815,12 @@ export default function AdminPropertiesPage() {
             </div>
             <div className="md:col-span-2">
               <Field label="Descrição completa" hint="Editor rico com títulos, listas, links, cores, destaque, alinhamento, tabelas simples e emojis.">
-                <RichTextEditor value={form.fullDescription ?? ''} onChange={(value) => setForm((current) => ({ ...current, fullDescription: value }))} placeholder="Monte uma descrição profissional com subtítulos, listas, destaques, localização e condições especiais." />
+                <RichTextEditor
+                  value={form.fullDescription ?? ''}
+                  onChange={(value) => setForm((current) => ({ ...current, fullDescription: value }))}
+                  onUploadImage={(file) => prepareAndUploadAdminImage(file, 'property-description')}
+                  placeholder="Monte uma descrição profissional com subtítulos, listas, destaques, localização e condições especiais."
+                />
               </Field>
             </div>
           </section>

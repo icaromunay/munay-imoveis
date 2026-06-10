@@ -17,6 +17,7 @@ type SmtpFormState = {
   hasPassword: boolean;
   passwordMasked: string;
   passwordUpdatedAt: string | null;
+  passwordWarning: string | null;
 };
 
 const emptyForm: SmtpFormState = {
@@ -30,7 +31,8 @@ const emptyForm: SmtpFormState = {
   timeout: '10000',
   hasPassword: false,
   passwordMasked: '',
-  passwordUpdatedAt: null
+  passwordUpdatedAt: null,
+  passwordWarning: null
 };
 
 function fieldClassName() {
@@ -57,7 +59,7 @@ export default function AdminSmtpSettingsPage() {
           form.port.trim() &&
           form.username.trim() &&
           form.timeout.trim() &&
-          (form.hasPassword || form.password.trim())
+          ((form.hasPassword && !form.passwordWarning) || form.password.trim())
       ),
     [form]
   );
@@ -81,7 +83,8 @@ export default function AdminSmtpSettingsPage() {
           timeout: String(data.timeout || 10000),
           hasPassword: Boolean(data.hasPassword),
           passwordMasked: data.passwordMasked || '',
-          passwordUpdatedAt: data.passwordUpdatedAt || null
+          passwordUpdatedAt: data.passwordUpdatedAt || null,
+          passwordWarning: data.passwordWarning || null
         });
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar as configurações SMTP.'))
@@ -120,7 +123,8 @@ export default function AdminSmtpSettingsPage() {
         password: '',
         hasPassword: Boolean(data?.settings?.hasPassword),
         passwordMasked: data?.settings?.passwordMasked || '************',
-        passwordUpdatedAt: data?.settings?.passwordUpdatedAt || new Date().toISOString()
+        passwordUpdatedAt: data?.settings?.passwordUpdatedAt || new Date().toISOString(),
+        passwordWarning: data?.settings?.passwordWarning || null
       }));
       setMessage(data?.message || 'Configurações SMTP salvas com sucesso.');
     } catch (submitError) {
@@ -177,6 +181,11 @@ export default function AdminSmtpSettingsPage() {
             </div>
 
             {loading ? <p className="text-sm text-zinc-400">Carregando configurações SMTP...</p> : null}
+            {form.passwordWarning ? (
+              <div className="rounded-[24px] border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100">
+                {form.passwordWarning}
+              </div>
+            ) : null}
 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2 md:col-span-2">
@@ -222,9 +231,11 @@ export default function AdminSmtpSettingsPage() {
                 <span className="text-sm font-medium text-white">Senha SMTP</span>
                 <input className={fieldClassName()} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={form.hasPassword ? form.passwordMasked || '************' : 'Digite a senha SMTP'} type="password" />
                 <p className="text-xs leading-6 text-zinc-500">
-                  {form.hasPassword
-                    ? `Senha protegida no banco. Deixe em branco para manter a atual${form.passwordUpdatedAt ? ` • atualizada em ${new Date(form.passwordUpdatedAt).toLocaleString('pt-BR')}` : ''}.`
-                    : 'A senha será criptografada antes de ser salva no banco.'}
+                  {form.passwordWarning
+                    ? 'A senha antiga não pode ser reaproveitada. Digite uma nova senha e salve para reativar o SMTP e a recuperação de senha.'
+                    : form.hasPassword
+                      ? `Senha protegida no banco. Deixe em branco para manter a atual${form.passwordUpdatedAt ? ` • atualizada em ${new Date(form.passwordUpdatedAt).toLocaleString('pt-BR')}` : ''}.`
+                      : 'A senha será criptografada antes de ser salva no banco.'}
                 </p>
               </label>
             </div>
