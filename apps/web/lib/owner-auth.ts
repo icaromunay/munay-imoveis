@@ -70,11 +70,22 @@ export async function ownerFetch(path: string, init?: RequestInit, retry = true)
 
   headers.set('Authorization', `Bearer ${token}`);
 
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...init,
-    headers,
-    cache: 'no-store'
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      ...init,
+      headers,
+      cache: 'no-store'
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/Failed to fetch/i.test(message)) {
+      throw new Error('Falha de conexão com a API do proprietário. Verifique se o backend está ativo e se a URL pública da API está correta.');
+    }
+
+    throw error instanceof Error ? error : new Error('Não foi possível se comunicar com a API do proprietário.');
+  }
 
   if (!response.ok) {
     let message = 'Não foi possível concluir a solicitação.';
