@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowRight, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Info, Mail, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { AdminSettingsNav } from '@/components/admin/AdminSettingsNav';
@@ -56,7 +56,7 @@ export default function AdminSettingsPage() {
       <div className="space-y-6">
         <AdminSettingsNav />
 
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-4 xl:grid-cols-3">
           <div className="rounded-[28px] border border-brand-gold/20 bg-brand-gold/10 p-5 text-sm leading-7 text-zinc-200">
             <div className="flex items-start gap-3">
               <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-brand-gold" />
@@ -86,6 +86,26 @@ export default function AdminSettingsPage() {
             </div>
             <div className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-brand-gold">
               Abrir SMTP
+              <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/settings/about"
+            className="group rounded-[28px] border border-white/10 bg-white/[0.04] p-5 text-zinc-200 transition hover:border-brand-gold/35 hover:bg-white/[0.06]"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm uppercase tracking-[0.24em] text-zinc-500">Configurações → SOBRE</p>
+                <h2 className="mt-3 text-xl font-semibold text-white">Versão e histórico desta entrega</h2>
+                <p className="mt-2 text-sm leading-7 text-zinc-400">
+                  Consulte a versão atual do portal, a data/hora da última atualização e o resumo técnico desta release.
+                </p>
+              </div>
+              <Info className="h-6 w-6 shrink-0 text-brand-gold" />
+            </div>
+            <div className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-brand-gold">
+              Abrir SOBRE
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
             </div>
           </Link>

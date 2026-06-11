@@ -14,14 +14,13 @@ function buildBrowserApiBaseUrl() {
     return '';
   }
 
-  const { protocol, hostname, port } = window.location;
+  const { protocol, hostname } = window.location;
 
   if (LOCAL_HOSTS.has(hostname)) {
     return `${protocol}//${hostname}:${LOCAL_FALLBACK_API_PORT}/api`;
   }
 
-  const normalizedPort = port && !['80', '443'].includes(port) ? `:${port}` : '';
-  return `${protocol}//${hostname}${normalizedPort}/api`;
+  return '/api';
 }
 
 export function getApiBaseUrl() {

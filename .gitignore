@@ -5,7 +5,4 @@ dist
 .env.local
 coverage
 .prisma
-
-# Uploads reais gerados em produção
-/public/uploads
-/uploads
+apps/web/public/uploads/

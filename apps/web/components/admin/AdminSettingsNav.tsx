@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutTemplate, Mail, Settings2 } from 'lucide-react';
+import { Info, LayoutTemplate, Mail, Settings2 } from 'lucide-react';
 
 const links = [
   { href: '/admin/settings', label: 'Geral', icon: Settings2 },
   { href: '/admin/settings/smtp', label: 'SMTP', icon: Mail },
-  { href: '/admin/settings/email-templates', label: 'Modelos de E-mail', icon: LayoutTemplate }
+  { href: '/admin/settings/email-templates', label: 'Modelos de E-mail', icon: LayoutTemplate },
+  { href: '/admin/settings/about', label: 'SOBRE', icon: Info }
 ];
 
 export function AdminSettingsNav() {

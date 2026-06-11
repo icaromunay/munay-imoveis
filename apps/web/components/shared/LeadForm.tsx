@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useId, useState } from 'react';
+import { FormEvent, useId, useMemo, useState } from 'react';
 import { createLead } from '@/lib/api';
 import { buildPropertyWhatsappMessage } from '@/lib/property-utils';
 
@@ -25,13 +25,25 @@ export function LeadForm({
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [whatsAppHref, setWhatsAppHref] = useState('');
   const fieldId = useId();
+
+  const inputStyle = useMemo(
+    () =>
+      ({
+        border: '1px solid var(--theme-institutional-border)',
+        background: 'color-mix(in srgb, var(--theme-institutional-surface) 82%, transparent)',
+        color: 'var(--theme-institutional-text-primary)'
+      }) as const,
+    []
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setSuccess('');
     setError('');
+    setWhatsAppHref('');
 
     const form = new FormData(event.currentTarget);
     const payload = {
@@ -71,8 +83,8 @@ export function LeadForm({
           }
         );
 
-        window.open(`https://wa.me/${whatsappConfig.phone}?text=${encodeURIComponent(whatsappMessage)}`, '_blank', 'noopener,noreferrer');
-        setSuccess('Recebemos seu contato e abrimos o WhatsApp em uma nova aba com a mensagem pronta.');
+        setWhatsAppHref(`https://wa.me/${whatsappConfig.phone}?text=${encodeURIComponent(whatsappMessage)}`);
+        setSuccess('Recebemos seu contato. Se quiser continuar no WhatsApp, use o botão abaixo.');
       } else {
         setSuccess('Recebemos seu contato. Nossa equipe vai retornar rapidamente.');
       }
@@ -84,12 +96,6 @@ export function LeadForm({
       setLoading(false);
     }
   }
-
-  const inputStyle = {
-    border: '1px solid var(--theme-institutional-border)',
-    background: 'color-mix(in srgb, var(--theme-institutional-surface) 82%, transparent)',
-    color: 'var(--theme-institutional-text-primary)'
-  } as const;
 
   return (
     <form
@@ -138,9 +144,19 @@ export function LeadForm({
         {loading ? 'Enviando...' : 'Quero atendimento'}
       </button>
 
-      <div aria-live="polite" className="min-h-6">
+      <div aria-live="polite" className="min-h-6 space-y-3">
         {success ? <p className="text-sm text-emerald-400">{success}</p> : null}
         {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+        {whatsAppHref ? (
+          <a
+            href={whatsAppHref}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-secondary inline-flex w-full justify-center"
+          >
+            Abrir WhatsApp manualmente
+          </a>
+        ) : null}
       </div>
 
       <p className="text-xs leading-5" style={{ color: 'var(--theme-institutional-text-secondary)' }}>Ao enviar, você concorda com o contato da equipe comercial e com a política de privacidade.</p>
