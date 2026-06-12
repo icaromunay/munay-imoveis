@@ -7,49 +7,109 @@ type CachedToken = {
   expiresAt: number;
 };
 
+const TOKEN_REFRESH_GRACE_MS = 30_000;
+
 let cachedToken: CachedToken | null = null;
 let pendingTokenRequest: Promise<string> | null = null;
 
+function logAdminAuth(event: string, details: Record<string, string | number | boolean | null | undefined> = {}) {
+  const serialized = Object.entries(details)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(' ');
+
+  console.info(`[admin-auth] ${event}${serialized ? ` ${serialized}` : ''}`);
+}
+
+function logAdminAuthError(event: string, error: unknown, details: Record<string, string | number | boolean | null | undefined> = {}) {
+  const serialized = Object.entries(details)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(' ');
+
+  console.error(`[admin-auth] ${event}${serialized ? ` ${serialized}` : ''}`, error);
+}
+
+function parseTokenExpiry(expiresAt: string | undefined, fallbackMs: number) {
+  const parsed = Date.parse(expiresAt || '');
+  return Number.isFinite(parsed) ? parsed : Date.now() + fallbackMs;
+}
+
 export const getToken = () => cachedToken?.token ?? null;
 
-export function clearToken() {
+export function clearToken(reason = 'manual-clear') {
+  logAdminAuth('token-cache-cleared', { reason, hadToken: Boolean(cachedToken) });
   cachedToken = null;
   pendingTokenRequest = null;
 }
 
+async function requestAdminAccessToken() {
+  const startedAt = Date.now();
+  logAdminAuth('token-request-start');
+
+  let response: Response;
+
+  try {
+    response = await fetch('/api/admin-token', {
+      method: 'GET',
+      cache: 'no-store',
+      credentials: 'same-origin'
+    });
+  } catch (error) {
+    const duration = Date.now() - startedAt;
+    logAdminAuthError('token-request-network-error', error, { duration });
+    throw new Error('Falha ao obter o token administrativo no NextAuth.');
+  }
+
+  const duration = Date.now() - startedAt;
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || !data?.token) {
+    logAdminAuth('token-request-http-error', {
+      status: response.status,
+      duration,
+      hasToken: Boolean(data?.token),
+      message: data?.message || null
+    });
+
+    throw new Error(data?.message || 'Não foi possível validar sua sessão administrativa.');
+  }
+
+  const nextToken = {
+    token: data.token,
+    expiresAt: parseTokenExpiry(data.expiresAt, 14 * 60 * 1000)
+  };
+
+  cachedToken = nextToken;
+  logAdminAuth('token-request-success', {
+    status: response.status,
+    duration,
+    expiresInMs: nextToken.expiresAt - Date.now()
+  });
+
+  return nextToken.token;
+}
+
 async function getAdminAccessToken(forceRefresh = false) {
-  const stillValid = cachedToken && cachedToken.expiresAt > Date.now() + 30_000;
+  const stillValid = cachedToken && cachedToken.expiresAt > Date.now() + TOKEN_REFRESH_GRACE_MS;
 
   if (!forceRefresh && stillValid && cachedToken) {
+    logAdminAuth('token-cache-hit', { expiresInMs: cachedToken.expiresAt - Date.now() });
     return cachedToken.token;
   }
 
   if (!forceRefresh && pendingTokenRequest) {
+    logAdminAuth('token-request-reused');
     return pendingTokenRequest;
   }
 
-  pendingTokenRequest = fetch('/api/admin-token', {
-    method: 'GET',
-    cache: 'no-store'
-  })
-    .then(async (response) => {
-      const data = await response.json().catch(() => null);
+  if (forceRefresh) {
+    clearToken('force-refresh');
+  }
 
-      if (!response.ok || !data?.token) {
-        throw new Error(data?.message || 'Não foi possível validar sua sessão administrativa.');
-      }
-
-      const nextToken = {
-        token: data.token,
-        expiresAt: Date.parse(data.expiresAt || '') || Date.now() + 14 * 60 * 1000
-      };
-
-      cachedToken = nextToken;
-      return nextToken.token;
-    })
-    .finally(() => {
-      pendingTokenRequest = null;
-    });
+  pendingTokenRequest = requestAdminAccessToken().finally(() => {
+    pendingTokenRequest = null;
+  });
 
   return pendingTokenRequest;
 }
@@ -64,22 +124,38 @@ export async function adminFetch(path: string, init?: RequestInit, retry = true)
 
   headers.set('Authorization', `Bearer ${token}`);
 
+  const baseUrl = getApiBaseUrl();
+  const requestUrl = `${baseUrl}${path}`;
+  const startedAt = Date.now();
+
+  logAdminAuth('api-request-start', {
+    path,
+    retry,
+    baseUrl
+  });
+
   let response: Response;
 
   try {
-    response = await fetch(`${getApiBaseUrl()}${path}`, {
+    response = await fetch(requestUrl, {
       ...init,
       headers,
-      cache: 'no-store'
+      cache: 'no-store',
+      credentials: 'same-origin'
     });
   } catch (error) {
+    const duration = Date.now() - startedAt;
     const message = error instanceof Error ? error.message : '';
+    logAdminAuthError('api-request-network-error', error, { path, duration, retry, baseUrl });
+
     if (/Failed to fetch/i.test(message)) {
       throw new Error('Falha de conexão com a API administrativa. Verifique se o backend está ativo e se a URL pública da API está correta.');
     }
 
     throw error instanceof Error ? error : new Error('Não foi possível se comunicar com a API administrativa.');
   }
+
+  const duration = Date.now() - startedAt;
 
   if (!response.ok) {
     let message = 'Não foi possível concluir a solicitação.';
@@ -95,8 +171,16 @@ export async function adminFetch(path: string, init?: RequestInit, retry = true)
       }
     }
 
+    logAdminAuth('api-request-http-error', {
+      path,
+      retry,
+      status: response.status,
+      duration,
+      message
+    });
+
     if ((response.status === 401 || response.status === 403) && retry) {
-      clearToken();
+      clearToken(`http-${response.status}`);
       return adminFetch(path, init, false);
     }
 
@@ -110,6 +194,12 @@ export async function adminFetch(path: string, init?: RequestInit, retry = true)
 
     throw new Error(message);
   }
+
+  logAdminAuth('api-request-success', {
+    path,
+    status: response.status,
+    duration
+  });
 
   if (response.status === 204) return null;
   return response.json();

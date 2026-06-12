@@ -1,6 +1,9 @@
 const LOCAL_FALLBACK_API_PORT = '4000';
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
 
+let browserResolutionLogged = false;
+let serverResolutionLogged = false;
+
 function normalizeApiBaseUrl(value?: string | null) {
   const trimmed = String(value || '').trim();
   if (!trimmed) return '';
@@ -9,33 +12,59 @@ function normalizeApiBaseUrl(value?: string | null) {
   return /\/api$/i.test(withoutTrailingSlash) ? withoutTrailingSlash : `${withoutTrailingSlash}/api`;
 }
 
-function buildBrowserApiBaseUrl() {
-  if (typeof window === 'undefined') {
-    return '';
+function logApiBaseResolution(scope: 'browser' | 'server', resolvedBaseUrl: string, reason: string) {
+  if (scope === 'browser') {
+    if (browserResolutionLogged) return;
+    browserResolutionLogged = true;
   }
 
+  if (scope === 'server') {
+    if (serverResolutionLogged) return;
+    serverResolutionLogged = true;
+  }
+
+  console.info(`[api-base] scope=${scope} base=${resolvedBaseUrl} reason=${reason}`);
+}
+
+function getBrowserApiBaseUrl() {
   const { protocol, hostname } = window.location;
 
   if (LOCAL_HOSTS.has(hostname)) {
-    return `${protocol}//${hostname}:${LOCAL_FALLBACK_API_PORT}/api`;
+    const resolved = `${protocol}//${hostname}:${LOCAL_FALLBACK_API_PORT}/api`;
+    logApiBaseResolution('browser', resolved, 'local-browser-fallback-port-4000');
+    return resolved;
   }
 
-  return '/api';
+  const resolved = '/api';
+  logApiBaseResolution('browser', resolved, 'same-origin-production-proxy');
+  return resolved;
+}
+
+function getServerApiBaseUrl() {
+  const candidates = [
+    ['INTERNAL_API_URL', process.env.INTERNAL_API_URL],
+    ['API_URL', process.env.API_URL],
+    ['NEXT_PUBLIC_API_URL', process.env.NEXT_PUBLIC_API_URL],
+    ['NEXTAUTH_URL', process.env.NEXTAUTH_URL]
+  ] as const;
+
+  for (const [name, value] of candidates) {
+    const normalized = normalizeApiBaseUrl(value);
+    if (!normalized) continue;
+
+    logApiBaseResolution('server', normalized, `env:${name}`);
+    return normalized;
+  }
+
+  const fallback = 'http://127.0.0.1:4000/api';
+  logApiBaseResolution('server', fallback, 'server-fallback-127.0.0.1:4000');
+  return fallback;
 }
 
 export function getApiBaseUrl() {
-  const explicitUrl = normalizeApiBaseUrl(
-    process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || process.env.INTERNAL_API_URL || process.env.NEXTAUTH_URL
-  );
-
-  if (explicitUrl) {
-    return explicitUrl;
+  if (typeof window !== 'undefined') {
+    return getBrowserApiBaseUrl();
   }
 
-  const browserUrl = normalizeApiBaseUrl(buildBrowserApiBaseUrl());
-  if (browserUrl) {
-    return browserUrl;
-  }
-
-  return 'http://127.0.0.1:4000/api';
+  return getServerApiBaseUrl();
 }
