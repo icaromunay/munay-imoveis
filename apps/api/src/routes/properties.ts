@@ -12,7 +12,7 @@ import { notifyOwnerPropertyReview } from '../utils/owner-notifications.js';
 import { getRichTextPlainText, sanitizeRichTextHtml } from '../utils/rich-text.js';
 import { notifyIndexNowPath } from '../utils/indexnow.js';
 import { parseYoutubeVideo } from '../utils/youtube.js';
-import { getAnalyticsDay } from '../utils/analytics.js';
+import { getAnalyticsDay, isValidAnalyticsDate } from '../utils/analytics.js';
 import { buildPropertyRevalidationPaths, revalidateSitePaths } from '../utils/revalidate-site.js';
 
 const router = Router();
@@ -1037,41 +1037,6 @@ router.post(
           }
         });
 
-        const analyticsDate = getAnalyticsDay();
-        const analyticsVisitor = await tx.propertyAnalyticsVisitorDay.findUnique({
-          where: {
-            propertyId_visitorKey_date: {
-              propertyId: property.id,
-              visitorKey: parsed.data.visitorKey,
-              date: analyticsDate
-            }
-          }
-        });
-
-        if (!analyticsVisitor) {
-          await tx.propertyAnalyticsVisitorDay.create({
-            data: {
-              propertyId: property.id,
-              visitorKey: parsed.data.visitorKey,
-              date: analyticsDate
-            }
-          });
-
-          await tx.propertyAnalyticsDaily.upsert({
-            where: { propertyId_date: { propertyId: property.id, date: analyticsDate } },
-            create: {
-              propertyId: property.id,
-              date: analyticsDate,
-              propertyViews: 1,
-              lastViewedAt: new Date()
-            },
-            update: {
-              propertyViews: { increment: 1 },
-              lastViewedAt: new Date()
-            }
-          });
-        }
-
         const updated = await tx.property.update({
           where: { id: property.id },
           data: { viewCount: { increment: 1 } },
@@ -1080,6 +1045,62 @@ router.post(
 
         return { unique: true, viewCount: updated.viewCount };
       });
+
+      try {
+        const analyticsDate = getAnalyticsDay();
+
+        if (!isValidAnalyticsDate(analyticsDate)) {
+          console.error('[analytics:property-view] invalid analytics date; analytics skipped', {
+            propertyId: property.id,
+            slug: String(req.params.slug),
+            visitorKey: parsed.data.visitorKey,
+            analyticsDate: String(analyticsDate)
+          });
+        } else {
+          await prisma.$transaction(async (tx) => {
+            const analyticsVisitor = await tx.propertyAnalyticsVisitorDay.findUnique({
+              where: {
+                propertyId_visitorKey_date: {
+                  propertyId: property.id,
+                  visitorKey: parsed.data.visitorKey,
+                  date: analyticsDate
+                }
+              }
+            });
+
+            if (!analyticsVisitor) {
+              await tx.propertyAnalyticsVisitorDay.create({
+                data: {
+                  propertyId: property.id,
+                  visitorKey: parsed.data.visitorKey,
+                  date: analyticsDate
+                }
+              });
+
+              await tx.propertyAnalyticsDaily.upsert({
+                where: { propertyId_date: { propertyId: property.id, date: analyticsDate } },
+                create: {
+                  propertyId: property.id,
+                  date: analyticsDate,
+                  propertyViews: 1,
+                  lastViewedAt: new Date()
+                },
+                update: {
+                  propertyViews: { increment: 1 },
+                  lastViewedAt: new Date()
+                }
+              });
+            }
+          });
+        }
+      } catch (analyticsError) {
+        console.error('[analytics:property-view] analytics failed but main operation will continue', {
+          propertyId: property.id,
+          slug: String(req.params.slug),
+          visitorKey: parsed.data.visitorKey,
+          error: analyticsError
+        });
+      }
 
       res.status(201).json(result);
       return;

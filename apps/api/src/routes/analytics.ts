@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { authMiddleware, BACKOFFICE_ROLES, requireRole } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/app-error.js';
-import { analyticsDateFromKey, getAnalyticsDateKey, parseAnalyticsRange } from '../utils/analytics.js';
+import { analyticsDateFromKey, getAnalyticsDateKey, isValidAnalyticsDate, parseAnalyticsRange } from '../utils/analytics.js';
 
 const router = Router();
 
@@ -27,7 +27,16 @@ const viewsQuerySchema = z.object({
 });
 
 function startOfToday() {
-  return analyticsDateFromKey(getAnalyticsDateKey());
+  const date = analyticsDateFromKey(getAnalyticsDateKey());
+
+  if (!isValidAnalyticsDate(date)) {
+    console.error('[analytics] startOfToday produced an invalid date', {
+      generatedKey: getAnalyticsDateKey(),
+      generatedDate: String(date)
+    });
+  }
+
+  return date;
 }
 
 function sumNumber<T>(items: T[], getter: (item: T) => number | null | undefined) {
@@ -46,40 +55,58 @@ router.post(
     const date = startOfToday();
     const { visitorKey } = parsed.data;
 
-    const tracked = await prisma.$transaction(async (tx) => {
-      const existing = await tx.homeAnalyticsVisitorDay.findUnique({
-        where: { visitorKey_date: { visitorKey, date } }
+    if (!isValidAnalyticsDate(date)) {
+      console.error('[analytics:home-visit] invalid analytics date; request ignored', {
+        visitorKey,
+        date: String(date)
+      });
+      res.status(202).json({ tracked: false, ignored: true });
+      return;
+    }
+
+    try {
+      const tracked = await prisma.$transaction(async (tx) => {
+        const existing = await tx.homeAnalyticsVisitorDay.findUnique({
+          where: { visitorKey_date: { visitorKey, date } }
+        });
+
+        if (existing?.visited) {
+          return false;
+        }
+
+        if (existing) {
+          await tx.homeAnalyticsVisitorDay.update({
+            where: { id: existing.id },
+            data: { visited: true }
+          });
+        } else {
+          await tx.homeAnalyticsVisitorDay.create({
+            data: {
+              visitorKey,
+              date,
+              visited: true
+            }
+          });
+        }
+
+        await tx.homeAnalyticsDaily.upsert({
+          where: { date },
+          create: { date, homeVisits: 1 },
+          update: { homeVisits: { increment: 1 } }
+        });
+
+        return true;
       });
 
-      if (existing?.visited) {
-        return false;
-      }
-
-      if (existing) {
-        await tx.homeAnalyticsVisitorDay.update({
-          where: { id: existing.id },
-          data: { visited: true }
-        });
-      } else {
-        await tx.homeAnalyticsVisitorDay.create({
-          data: {
-            visitorKey,
-            date,
-            visited: true
-          }
-        });
-      }
-
-      await tx.homeAnalyticsDaily.upsert({
-        where: { date },
-        create: { date, homeVisits: 1 },
-        update: { homeVisits: { increment: 1 } }
+      res.status(tracked ? 201 : 200).json({ tracked });
+    } catch (error) {
+      console.error('[analytics:home-visit] failed but request will not break the page', {
+        visitorKey,
+        date: date.toISOString(),
+        error
       });
-
-      return true;
-    });
-
-    res.status(tracked ? 201 : 200).json({ tracked });
+      res.status(202).json({ tracked: false, ignored: true });
+    }
   })
 );
 
@@ -105,41 +132,61 @@ router.post(
 
     const config = fieldMap[eventType];
 
-    const tracked = await prisma.$transaction(async (tx) => {
-      const existing = await tx.homeAnalyticsVisitorDay.findUnique({
-        where: { visitorKey_date: { visitorKey, date } }
+    if (!isValidAnalyticsDate(date)) {
+      console.error('[analytics:home-video] invalid analytics date; request ignored', {
+        visitorKey,
+        eventType,
+        date: String(date)
+      });
+      res.status(202).json({ tracked: false, ignored: true });
+      return;
+    }
+
+    try {
+      const tracked = await prisma.$transaction(async (tx) => {
+        const existing = await tx.homeAnalyticsVisitorDay.findUnique({
+          where: { visitorKey_date: { visitorKey, date } }
+        });
+
+        const alreadyTracked = existing ? Boolean(existing[config.visitorField]) : false;
+        if (alreadyTracked) {
+          return false;
+        }
+
+        if (existing) {
+          await tx.homeAnalyticsVisitorDay.update({
+            where: { id: existing.id },
+            data: { [config.visitorField]: true }
+          });
+        } else {
+          await tx.homeAnalyticsVisitorDay.create({
+            data: {
+              visitorKey,
+              date,
+              [config.visitorField]: true
+            }
+          });
+        }
+
+        await tx.homeAnalyticsDaily.upsert({
+          where: { date },
+          create: { date, [config.dailyField]: 1 },
+          update: { [config.dailyField]: { increment: 1 } }
+        });
+
+        return true;
       });
 
-      const alreadyTracked = existing ? Boolean(existing[config.visitorField]) : false;
-      if (alreadyTracked) {
-        return false;
-      }
-
-      if (existing) {
-        await tx.homeAnalyticsVisitorDay.update({
-          where: { id: existing.id },
-          data: { [config.visitorField]: true }
-        });
-      } else {
-        await tx.homeAnalyticsVisitorDay.create({
-          data: {
-            visitorKey,
-            date,
-            [config.visitorField]: true
-          }
-        });
-      }
-
-      await tx.homeAnalyticsDaily.upsert({
-        where: { date },
-        create: { date, [config.dailyField]: 1 },
-        update: { [config.dailyField]: { increment: 1 } }
+      res.status(tracked ? 201 : 200).json({ tracked });
+    } catch (error) {
+      console.error('[analytics:home-video] failed but request will not break the page', {
+        visitorKey,
+        eventType,
+        date: date.toISOString(),
+        error
       });
-
-      return true;
-    });
-
-    res.status(tracked ? 201 : 200).json({ tracked });
+      res.status(202).json({ tracked: false, ignored: true });
+    }
   })
 );
 
@@ -164,19 +211,41 @@ router.post(
     const date = startOfToday();
     const updateField = parsed.data.action === 'WHATSAPP' ? 'whatsappClicks' : 'scheduleVisitClicks';
 
-    await prisma.propertyAnalyticsDaily.upsert({
-      where: { propertyId_date: { propertyId: property.id, date } },
-      create: {
+    if (!isValidAnalyticsDate(date)) {
+      console.error('[analytics:property-contact-click] invalid analytics date; request ignored', {
         propertyId: property.id,
-        date,
-        [updateField]: 1
-      },
-      update: {
-        [updateField]: { increment: 1 }
-      }
-    });
+        slug: String(req.params.slug),
+        action: parsed.data.action,
+        date: String(date)
+      });
+      res.status(202).json({ tracked: false, ignored: true });
+      return;
+    }
 
-    res.status(201).json({ tracked: true });
+    try {
+      await prisma.propertyAnalyticsDaily.upsert({
+        where: { propertyId_date: { propertyId: property.id, date } },
+        create: {
+          propertyId: property.id,
+          date,
+          [updateField]: 1
+        },
+        update: {
+          [updateField]: { increment: 1 }
+        }
+      });
+
+      res.status(201).json({ tracked: true });
+    } catch (error) {
+      console.error('[analytics:property-contact-click] failed but request will not break the page', {
+        propertyId: property.id,
+        slug: String(req.params.slug),
+        action: parsed.data.action,
+        date: date.toISOString(),
+        error
+      });
+      res.status(202).json({ tracked: false, ignored: true });
+    }
   })
 );
 
