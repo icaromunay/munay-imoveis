@@ -57,7 +57,12 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const startedAt = Date.now();
-  const [settings, session] = await Promise.all([getSettings(), safeAuth()]);
+  const settingsPromise = getSettings();
+  const sessionPromise = safeAuth().catch((error) => {
+    console.error('[auth] root-layout-session-fallback', error);
+    return null;
+  });
+  const [settings, session] = await Promise.all([settingsPromise, sessionPromise]);
   const duration = Date.now() - startedAt;
   console.info(`[theme:render-root] slug=${OFFICIAL_THEME_LAYOUT_SLUG} mode=static duration=${duration}ms`);
 

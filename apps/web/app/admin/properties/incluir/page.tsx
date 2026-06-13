@@ -149,6 +149,16 @@ function toNumericValue(value: string | number | null | undefined) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function getRichTextPlainText(value: string) {
+  return String(value || '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function isKnownTypeOption(value: string) {
   return PROPERTY_TYPE_OPTIONS.some((option) => option.value === value);
 }
@@ -650,8 +660,23 @@ export default function AdminPropertiesPage() {
     setMessage('');
 
     try {
+      const trimmedTitle = String(form.title || '').trim();
+      const trimmedShortDescription = String(form.shortDescription || '').trim();
+      const richTextLength = getRichTextPlainText(String(form.fullDescription || '')).length;
+      const numericPrice = Number(form.price);
+      const trimmedCity = String(form.city || '').trim();
+      const trimmedDistrict = String(form.district || '').trim();
+
+      if (!trimmedTitle || trimmedTitle.length < 3) throw new Error('Informe o título do imóvel com pelo menos 3 caracteres.');
+      if (!trimmedShortDescription || trimmedShortDescription.length < 10) throw new Error('Informe a descrição curta com pelo menos 10 caracteres.');
+      if (richTextLength < 20) throw new Error('Informe a descrição completa com pelo menos 20 caracteres visíveis.');
+      if (!Number.isFinite(numericPrice) || numericPrice <= 0) throw new Error('Informe um preço válido para o imóvel.');
+      if (!trimmedCity || trimmedCity.length < 2) throw new Error('Informe a cidade do imóvel.');
+      if (!trimmedDistrict || trimmedDistrict.length < 2) throw new Error('Informe o bairro do imóvel.');
       if (!imagePreviews.length) throw new Error('Envie pelo menos uma foto para publicar o imóvel.');
       if (hasInvalidPropertyVideo) throw new Error('Informe um link válido do YouTube para o vídeo do imóvel.');
+      if (form.acceptsDirectInstallments && !toNumericValue(form.maxDirectInstallments)) throw new Error('Informe a quantidade máxima de parcelas do parcelamento direto.');
+      if (form.hasDevelopmentInstallments && !toNumericValue(form.developmentMaxInstallments)) throw new Error('Informe a quantidade máxima de parcelas da loteadora.');
 
       const resolvedType = String(form.type || defaultPropertyType(form.category)).trim();
       const resolvedCategory = inferCategoryFromType(resolvedType, form.category);
@@ -659,13 +684,13 @@ export default function AdminPropertiesPage() {
       const landArea = toNumericValue(form.landArea);
       const lotsMinArea = toNumericValue(form.lotsMinArea);
       const payload = {
-        title: String(form.title || '').trim(),
-        shortDescription: String(form.shortDescription || '').trim(),
+        title: trimmedTitle,
+        shortDescription: trimmedShortDescription,
         fullDescription: String(form.fullDescription || ''),
         category: resolvedCategory,
         type: resolvedType,
         status: form.status,
-        price: Number(form.price),
+        price: numericPrice,
         promotionalPrice: toNumericValue(form.promotionalPrice),
         area: builtArea ?? landArea ?? lotsMinArea ?? toNumericValue(form.area) ?? 1,
         landArea,
@@ -802,7 +827,7 @@ export default function AdminPropertiesPage() {
   return (
     <AdminShell title="INCLUIR IMÓVEIS" sidebarContent={previewSidebar}>
       <div className="min-w-0">
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
           <section className="card-premium p-6 md:p-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
@@ -824,14 +849,14 @@ export default function AdminPropertiesPage() {
 
           <section className="card-premium grid gap-5 p-6 md:grid-cols-2 md:p-8">
             <Field label="Título do imóvel" hint="Ex.: Casa com 3 suítes em bairro nobre.">
-              <input value={form.title ?? ''} onChange={(e) => setForm({ ...form, title: e.target.value })} className={baseInputClassName()} required />
+              <input value={form.title ?? ''} onChange={(e) => setForm({ ...form, title: e.target.value })} className={baseInputClassName()} />
             </Field>
             <Field label="Código interno" hint="Opcional. Deixe em branco para gerar automaticamente.">
               <input value={form.propertyCode ?? ''} onChange={(e) => setForm({ ...form, propertyCode: e.target.value })} placeholder="Ex.: CA001" className={baseInputClassName()} />
             </Field>
             <div className="md:col-span-2">
               <Field label="Descrição curta" hint="Texto curto que aparece nos cards do site para o cliente ler rapidamente.">
-                <textarea value={form.shortDescription ?? ''} onChange={(e) => setForm({ ...form, shortDescription: e.target.value })} rows={3} className={baseInputClassName()} required />
+                <textarea value={form.shortDescription ?? ''} onChange={(e) => setForm({ ...form, shortDescription: e.target.value })} rows={3} className={baseInputClassName()} />
               </Field>
             </div>
             <div className="md:col-span-2">
@@ -878,7 +903,7 @@ export default function AdminPropertiesPage() {
               </select>
             </Field>
             <Field label="Preço">
-              <input type="number" min="1" value={form.price ?? ''} onChange={(e) => setForm({ ...form, price: e.target.value })} className={baseInputClassName()} required />
+              <input type="number" min="1" value={form.price ?? ''} onChange={(e) => setForm({ ...form, price: e.target.value })} className={baseInputClassName()} />
             </Field>
             <Field label="Preço promocional" hint="Opcional.">
               <input type="number" min="0" value={form.promotionalPrice ?? ''} onChange={(e) => setForm({ ...form, promotionalPrice: e.target.value })} className={baseInputClassName()} />
@@ -903,10 +928,10 @@ export default function AdminPropertiesPage() {
               </select>
             </Field>
             <Field label="Cidade">
-              <input value={form.city ?? ''} onChange={(e) => setForm({ ...form, city: e.target.value })} className={baseInputClassName()} required />
+              <input value={form.city ?? ''} onChange={(e) => setForm({ ...form, city: e.target.value })} className={baseInputClassName()} />
             </Field>
             <Field label="Bairro">
-              <input value={form.district ?? ''} onChange={(e) => setForm({ ...form, district: e.target.value })} className={baseInputClassName()} required />
+              <input value={form.district ?? ''} onChange={(e) => setForm({ ...form, district: e.target.value })} className={baseInputClassName()} />
             </Field>
             <Field label="Área principal exibida">
               <input value={getPrimaryAreaLabel(previewProperty)} className={`${baseInputClassName()} opacity-80`} readOnly />

@@ -63,7 +63,10 @@ async function fetcher<T>(path: string, fallback: T, options?: RequestInit): Pro
     clearTimeout(timeout);
 
     if (response.status === 429) {
-      throw buildRateLimitError(response, path);
+      const rateLimitError = buildRateLimitError(response, path);
+      const duration = Date.now() - startedAt;
+      logFrontendFetch(path, duration, 'fallback', `reason=rate-limit retryAfter=${rateLimitError.retryAfterSeconds ?? 'unknown'}`);
+      return fallback;
     }
 
     if (!response.ok) {
@@ -78,8 +81,8 @@ async function fetcher<T>(path: string, fallback: T, options?: RequestInit): Pro
     const duration = Date.now() - startedAt;
 
     if (error instanceof ApiRateLimitError) {
-      logFrontendFetch(path, duration, 'error', `reason=rate-limit retryAfter=${error.retryAfterSeconds ?? 'unknown'}`);
-      throw error;
+      logFrontendFetch(path, duration, 'fallback', `reason=rate-limit retryAfter=${error.retryAfterSeconds ?? 'unknown'}`);
+      return fallback;
     }
 
     const reason = error instanceof Error ? error.message : 'fallback';
