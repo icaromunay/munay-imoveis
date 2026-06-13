@@ -5,6 +5,41 @@ import { getApiBaseUrl } from './api-base';
 export const API_URL = getApiBaseUrl();
 const FETCH_TIMEOUT_MS = 3500;
 
+export class ApiRateLimitError extends Error {
+  retryAfterSeconds: number | null;
+
+  constructor(message: string, retryAfterSeconds: number | null) {
+    super(message);
+    this.name = 'ApiRateLimitError';
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+function parseRetryAfterSeconds(value: string | null) {
+  if (!value) return null;
+
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric >= 0) {
+    return numeric;
+  }
+
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) {
+    return Math.max(0, Math.ceil((dateMs - Date.now()) / 1000));
+  }
+
+  return null;
+}
+
+function buildRateLimitError(response: Response, path: string) {
+  const retryAfterSeconds =
+    parseRetryAfterSeconds(response.headers.get('retry-after')) ?? parseRetryAfterSeconds(response.headers.get('ratelimit-reset'));
+
+  const retryMessage = retryAfterSeconds != null ? ` Tente novamente em cerca de ${retryAfterSeconds} segundo(s).` : '';
+
+  return new ApiRateLimitError(`A API atingiu o limite temporário de requisições ao carregar ${path}.${retryMessage}`, retryAfterSeconds);
+}
+
 function logFrontendFetch(path: string, duration: number, status: 'ok' | 'fallback' | 'error', details = '') {
   const shouldLog = duration >= 250 || path.startsWith('/themes') || path.startsWith('/settings') || path.startsWith('/properties');
 
@@ -27,6 +62,10 @@ async function fetcher<T>(path: string, fallback: T, options?: RequestInit): Pro
 
     clearTimeout(timeout);
 
+    if (response.status === 429) {
+      throw buildRateLimitError(response, path);
+    }
+
     if (!response.ok) {
       throw new Error(`Erro ao carregar ${path}`);
     }
@@ -37,6 +76,12 @@ async function fetcher<T>(path: string, fallback: T, options?: RequestInit): Pro
   } catch (error) {
     clearTimeout(timeout);
     const duration = Date.now() - startedAt;
+
+    if (error instanceof ApiRateLimitError) {
+      logFrontendFetch(path, duration, 'error', `reason=rate-limit retryAfter=${error.retryAfterSeconds ?? 'unknown'}`);
+      throw error;
+    }
+
     const reason = error instanceof Error ? error.message : 'fallback';
     logFrontendFetch(path, duration, 'fallback', `reason=${reason}`);
     return fallback;

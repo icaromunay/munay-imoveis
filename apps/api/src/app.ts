@@ -1,5 +1,5 @@
 import cors from 'cors';
-import express from 'express';
+import express, { type Request } from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
@@ -20,11 +20,49 @@ import themeRoutes from './routes/themes.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { notFoundHandler } from './middleware/not-found.js';
 
+const GLOBAL_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const GLOBAL_RATE_LIMIT_MAX_PRODUCTION = 3000;
+const GLOBAL_RATE_LIMIT_MAX_NON_PRODUCTION = 5000;
+
+const GLOBAL_RATE_LIMIT_EXEMPT_PREFIXES = [
+  '/api/health',
+  '/api/redirects/resolve',
+  '/api/admin-token',
+  '/api/owner-token',
+  '/api/auth/session'
+] as const;
+
+function hasBearerAuthorization(req: Request) {
+  const authHeader = req.headers.authorization;
+  return typeof authHeader === 'string' && authHeader.startsWith('Bearer ');
+}
+
+function shouldSkipGlobalRateLimit(req: Request) {
+  const originalUrl = String(req.originalUrl || req.url || '');
+
+  if (GLOBAL_RATE_LIMIT_EXEMPT_PREFIXES.some((prefix) => originalUrl === prefix || originalUrl.startsWith(`${prefix}?`))) {
+    return true;
+  }
+
+  if (hasBearerAuthorization(req)) {
+    return true;
+  }
+
+  return false;
+}
+
+function getRateLimitKey(req: Request) {
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
 const globalRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: env.NODE_ENV === 'production' ? 400 : 1000,
+  windowMs: GLOBAL_RATE_LIMIT_WINDOW_MS,
+  max: env.NODE_ENV === 'production' ? GLOBAL_RATE_LIMIT_MAX_PRODUCTION : GLOBAL_RATE_LIMIT_MAX_NON_PRODUCTION,
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  keyGenerator: getRateLimitKey,
+  skip: shouldSkipGlobalRateLimit,
+  message: { message: 'Limite temporário de requisições atingido. Tente novamente em alguns minutos.' }
 });
 
 const uploadsPath = fileURLToPath(new URL('../../web/public/uploads', import.meta.url));
@@ -33,6 +71,7 @@ export function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
+  app.set('trust proxy', env.NODE_ENV === 'production' ? 1 : false);
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' }
