@@ -28,7 +28,12 @@ export default async function BlogPage() {
 
       <div className="grid gap-8 lg:grid-cols-2">
         {posts.map((post, index) => (
-          <article key={post.id} className={`theme-blog-card group overflow-hidden transition duration-500 hover:-translate-y-1 ${index === 0 ? 'lg:col-span-2 lg:grid lg:grid-cols-[1.1fr_0.9fr]' : ''}`}>
+          <Link
+            key={post.id}
+            href={`/blog/${post.slug}`}
+            className={`theme-blog-card group block overflow-hidden transition duration-500 hover:-translate-y-1 hover:no-underline ${index === 0 ? 'lg:col-span-2 lg:grid lg:grid-cols-[1.1fr_0.9fr]' : ''}`}
+            aria-label={`Abrir artigo ${post.title}`}
+          >
             <div className="relative min-h-[320px] overflow-hidden">
               <Image src={post.coverImage} alt={post.title} fill sizes={index === 0 ? '(max-width: 1024px) 100vw, 60vw' : '(max-width: 1024px) 100vw, 50vw'} className="object-cover transition duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#08110d] via-[#08110d]/40 to-transparent" />
@@ -37,7 +42,7 @@ export default async function BlogPage() {
               </div>
             </div>
 
-            <div className="flex flex-col justify-between p-7 md:p-8">
+            <div className="flex h-full flex-col justify-between p-7 md:p-8">
               <div>
                 <div className="flex flex-wrap items-center gap-4 text-sm" style={{ color: 'var(--theme-blog-text-secondary)' }}>
                   <span className="inline-flex items-center gap-2">
@@ -56,13 +61,13 @@ export default async function BlogPage() {
 
               <div className="mt-8 flex items-center justify-between gap-4 border-t pt-6" style={{ borderColor: 'var(--theme-blog-border)' }}>
                 <span className="text-sm uppercase tracking-[0.25em]" style={{ color: 'var(--theme-blog-text-secondary)' }}>Leitura estratégica</span>
-                <Link href={`/blog/${post.slug}`} className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition hover:opacity-90" style={{ border: '1px solid color-mix(in srgb, var(--theme-blog-button) 25%, transparent)', background: 'color-mix(in srgb, var(--theme-blog-button) 10%, transparent)', color: 'var(--theme-blog-button)' }}>
+                <span className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition group-hover:opacity-90" style={{ border: '1px solid color-mix(in srgb, var(--theme-blog-button) 25%, transparent)', background: 'color-mix(in srgb, var(--theme-blog-button) 10%, transparent)', color: 'var(--theme-blog-button)' }}>
                   Ler artigo
                   <ChevronRight size={16} />
-                </Link>
+                </span>
               </div>
             </div>
-          </article>
+          </Link>
         ))}
       </div>
     </section>

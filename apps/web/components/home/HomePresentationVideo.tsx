@@ -23,9 +23,10 @@ export function HomePresentationVideo({
   maskEnabled = true
 }: HomePresentationVideoProps) {
   const parsedVideo = useMemo(() => parseYoutubeVideo(youtubeUrl), [youtubeUrl]);
-  const [playerActivated, setPlayerActivated] = useState(false);
+  const [soundActivated, setSoundActivated] = useState(false);
   const [playerReady, setPlayerReady] = useState(false);
   const [playTracked, setPlayTracked] = useState(false);
+  const [playerInstanceKey, setPlayerInstanceKey] = useState(0);
 
   const effectiveTitle = title?.trim() || 'Vídeo de apresentação';
   const effectiveDescription = description?.trim() || 'Conheça melhor nossa proposta e nossos diferenciais.';
@@ -33,8 +34,9 @@ export function HomePresentationVideo({
 
   if (!parsedVideo) return null;
 
+  const playerActivated = autoplayEnabled || soundActivated;
   const embedUrl = buildYoutubeEmbedUrl(parsedVideo.videoId, {
-    autoplay: playerActivated && autoplayEnabled,
+    autoplay: playerActivated,
     controls: true,
     rel: false,
     modestBranding: true,
@@ -45,14 +47,15 @@ export function HomePresentationVideo({
     enableJsApi: false,
     nocookie: true,
     loop: false,
-    mute: false,
+    mute: !soundActivated,
+    start: 0,
     origin: typeof window !== 'undefined' ? window.location.origin : undefined
   });
 
-  const handleActivateVideo = () => {
-    if (!playerActivated) {
-      setPlayerActivated(true);
-    }
+  const handleActivateSound = () => {
+    setPlayerReady(false);
+    setSoundActivated(true);
+    setPlayerInstanceKey((current) => current + 1);
 
     if (!playTracked) {
       const visitorKey = getClientVisitorKey();
@@ -63,7 +66,7 @@ export function HomePresentationVideo({
     }
   };
 
-  const showVisualMask = maskEnabled && !playerActivated;
+  const showVisualMask = maskEnabled && !soundActivated;
 
   return (
     <section className="content-auto pb-10 pt-8 sm:pb-12 sm:pt-10 lg:pb-14" aria-label="Vídeo institucional da home">
@@ -84,6 +87,7 @@ export function HomePresentationVideo({
                 <div className="relative aspect-video overflow-hidden bg-black">
                   {playerActivated ? (
                     <iframe
+                      key={`${parsedVideo.videoId}-${playerInstanceKey}-${soundActivated ? 'sound-on' : 'muted'}`}
                       src={embedUrl}
                       title={effectiveTitle}
                       className="absolute inset-0 h-full w-full border-0"
@@ -96,6 +100,8 @@ export function HomePresentationVideo({
                     <img src={previewImage} alt={effectiveTitle} className="absolute inset-0 h-full w-full scale-[1.03] object-cover opacity-40" />
                   ) : null}
 
+                  {!playerActivated && previewImage ? <img src={previewImage} alt={effectiveTitle} className="absolute inset-0 h-full w-full scale-[1.03] object-cover opacity-40" /> : null}
+
                   <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_48%,rgba(212,175,114,0.14),transparent_26%),linear-gradient(180deg,rgba(0,0,0,0.14),rgba(0,0,0,0.45))]" />
                   <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/72 via-black/14 to-transparent" />
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/72 via-black/18 to-transparent" />
@@ -107,9 +113,9 @@ export function HomePresentationVideo({
                   {showVisualMask ? (
                     <button
                       type="button"
-                      onClick={handleActivateVideo}
+                      onClick={handleActivateSound}
                       className="absolute inset-0 z-20 h-full w-full cursor-pointer"
-                      aria-label="Clique para carregar o vídeo"
+                      aria-label="Clique para ativar o som"
                     >
                       <div className="flex h-full w-full flex-col items-center justify-center gap-5 bg-[linear-gradient(180deg,rgba(2,4,3,0.12),rgba(2,4,3,0.32))]">
                         <span className="inline-flex h-20 w-20 items-center justify-center rounded-full border border-brand-gold/30 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.18),rgba(212,175,114,0.14),rgba(8,17,13,0.25))] shadow-[0_0_0_10px_rgba(255,255,255,0.03),0_0_0_24px_rgba(212,175,114,0.05),0_24px_60px_rgba(0,0,0,0.36)]">
@@ -119,8 +125,7 @@ export function HomePresentationVideo({
                         </span>
 
                         <div className="rounded-full border border-white/15 bg-[linear-gradient(180deg,rgba(8,17,15,0.48),rgba(8,17,15,0.82))] px-6 py-3 text-center shadow-[0_24px_60px_rgba(0,0,0,0.36)] backdrop-blur-xl">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.38em] text-zinc-100 sm:text-xs">Clique para carregar o vídeo</p>
-                          <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-zinc-400">Nenhum app externo é acionado automaticamente</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.38em] text-zinc-100 sm:text-xs">Clique para ativar o som</p>
                         </div>
                       </div>
                     </button>

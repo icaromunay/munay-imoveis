@@ -44,7 +44,7 @@ export function ShareButtons({ title, url }: { title: string; url: string }) {
             href={item.href}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:border-brand-gold/35 hover:text-brand-gold"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-amber-300 hover:text-amber-700"
           >
             <Icon size={16} />
             {item.label}
@@ -55,7 +55,7 @@ export function ShareButtons({ title, url }: { title: string; url: string }) {
       <button
         type="button"
         onClick={handleCopy}
-        className="inline-flex items-center gap-2 rounded-full border border-brand-gold/25 bg-brand-gold/10 px-4 py-3 text-sm font-medium text-brand-gold transition hover:opacity-90"
+        className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 transition hover:opacity-90"
       >
         {copied ? <Check size={16} /> : <Copy size={16} />}
         {copied ? 'Link copiado' : 'Copiar link'}

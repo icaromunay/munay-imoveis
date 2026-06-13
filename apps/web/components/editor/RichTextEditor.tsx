@@ -1,6 +1,6 @@
 'use client';
 
-import { type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { Extension, Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -56,7 +56,7 @@ declare module '@tiptap/core' {
   }
 }
 
-const textColors = ['#F7F3EA', '#D4AF72', '#22C55E', '#60A5FA', '#F97316', '#EF4444'];
+const textColors = ['#0F172A', '#B45309', '#15803D', '#2563EB', '#C2410C', '#DC2626'];
 const highlightColors = ['#FEF08A', '#BBF7D0', '#BFDBFE', '#FECACA'];
 const fontSizes = [12, 14, 16, 18, 20, 24, 28, 32];
 const headingOptions = [
@@ -197,6 +197,16 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;');
 }
 
+const lightEditorTheme: CSSProperties = {
+  ['--theme-institutional-text-primary' as string]: '#0F172A',
+  ['--theme-institutional-text-secondary' as string]: '#334155',
+  ['--theme-institutional-border' as string]: '#CBD5E1',
+  ['--theme-institutional-surface' as string]: '#F8FAFC',
+  ['--theme-accent' as string]: '#B45309',
+  ['--theme-button-primary-bg' as string]: '#F59E0B',
+  ['--theme-button-primary-text' as string]: '#0F172A'
+};
+
 function ToolbarButton({
   active = false,
   onClick,
@@ -219,8 +229,8 @@ function ToolbarButton({
       disabled={disabled}
       className={`inline-flex h-10 min-w-10 items-center justify-center rounded-xl border px-3 text-sm transition ${
         active
-          ? 'border-brand-gold bg-brand-gold text-[#08110d]'
-          : 'border-white/10 bg-white/5 text-white hover:border-brand-gold/40 hover:text-brand-gold'
+          ? 'border-amber-500 bg-amber-400 text-slate-900'
+          : 'border-slate-200 bg-white text-slate-700 hover:border-amber-300 hover:text-amber-700'
       } disabled:cursor-not-allowed disabled:opacity-60`}
     >
       {children}
@@ -287,7 +297,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          'rich-text-editor min-h-[420px] rounded-b-[1.5rem] border-x border-b border-white/10 bg-[#08110d]/70 px-5 py-5 text-white focus:outline-none'
+          'rich-text-editor min-h-[420px] rounded-b-[1.5rem] border-x border-b border-slate-200 bg-white px-5 py-5 text-slate-900 focus:outline-none'
       }
     },
     onUpdate: ({ editor: currentEditor }) => {
@@ -401,15 +411,15 @@ export function RichTextEditor({
   }
 
   if (!editor) {
-    return <div className="min-h-[420px] rounded-[1.5rem] border border-white/10 bg-white/5" />;
+    return <div className="min-h-[420px] rounded-[1.5rem] border border-slate-200 bg-white" style={lightEditorTheme} />;
   }
 
   return (
-    <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#08110d]/50">
+    <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white" style={lightEditorTheme}>
       <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={handleImageFileSelection} />
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-white/[0.04] p-3">
-        <div className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 p-3">
+        <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3">
           <select
             aria-label="Formato do texto"
             value={currentHeadingValue}
@@ -421,10 +431,10 @@ export function RichTextEditor({
               }
               editor.chain().focus().setHeading({ level: nextLevel as 1 | 2 | 3 | 4 | 5 | 6 }).run();
             }}
-            className="h-10 bg-transparent text-sm text-white outline-none"
+            className="h-10 bg-transparent text-sm text-slate-700 outline-none"
           >
             {headingOptions.map((option) => (
-              <option key={option.value} value={option.value} className="bg-[#08110d] text-white">
+              <option key={option.value} value={option.value} className="bg-white text-slate-900">
                 {option.label}
               </option>
             ))}
