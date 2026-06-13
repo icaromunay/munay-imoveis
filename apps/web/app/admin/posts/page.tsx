@@ -59,8 +59,20 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
+function normalizeRichTextForCompare(value: string) {
+  const normalized = String(value || '').trim();
+  return normalized === '<p></p>' || normalized === '<p><br></p>' ? '' : normalized;
+}
+
+function normalizePostFormForCompare(form: PostEditorForm): PostEditorForm {
+  return {
+    ...form,
+    content: normalizeRichTextForCompare(form.content)
+  };
+}
+
 function isSameForm(a: PostEditorForm, b: PostEditorForm) {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return JSON.stringify(normalizePostFormForCompare(a)) === JSON.stringify(normalizePostFormForCompare(b));
 }
 
 function buildPostPayload(form: PostEditorForm) {

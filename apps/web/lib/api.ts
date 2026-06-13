@@ -178,15 +178,45 @@ export const getActiveThemeLayout = async () => {
   return layout;
 };
 
+const propertyDetailCache = new Map<string, Property & { related: Property[] }>();
+
+function cachePropertyDetail(property: (Property & { related?: Property[] }) | null | undefined) {
+  if (!property?.slug) return;
+
+  propertyDetailCache.set(property.slug, {
+    ...property,
+    related: Array.isArray(property.related) ? property.related : []
+  });
+}
+
 export const getProperties = async (query = '') => {
   const fallback = applyMockPropertyFilter(query);
   const items = await fetcher<Property[]>(`/properties${query}`, fallback);
-  return Array.isArray(items) ? items : fallback;
+  const normalized = Array.isArray(items) ? items : fallback;
+  normalized.forEach((item) => cachePropertyDetail(item));
+  return normalized;
 };
 
 export const getProperty = async (slug: string) => {
-  const item = await fetcher<(Property & { related: Property[] }) | null>(`/properties/${slug}`, null);
-  return item || null;
+  const item = await fetcher<(Property & { related: Property[] }) | undefined>(`/properties/${slug}`, undefined);
+
+  if (item) {
+    cachePropertyDetail(item);
+    return item;
+  }
+
+  const listFallback = await getProperties('?limit=200');
+  const matchedFromList = listFallback.find((entry) => entry.slug === slug);
+  if (matchedFromList) {
+    const hydrated = {
+      ...matchedFromList,
+      related: matchedFromList.related || []
+    };
+    cachePropertyDetail(hydrated);
+    return hydrated;
+  }
+
+  return propertyDetailCache.get(slug) || null;
 };
 
 let propertyLocationOptionsCache: { data: PropertyLocationGroup[]; expiresAt: number } | null = null;

@@ -1,0 +1,28 @@
+Versão gerada: 15.1
+Base comparada: 15.0
+
+Arquivos alterados em relação à versão 15.0:
+- apps/web/app/admin/properties/incluir/page.tsx
+- apps/web/app/admin/posts/page.tsx
+- apps/web/lib/api.ts
+- apps/web/lib/app-release.ts
+
+Resumo por arquivo:
+1) apps/web/app/admin/properties/incluir/page.tsx
+   - Corrige o foco no editor de descrição do imóvel.
+   - Remove a ativação indireta do input de imagem oculto ao clicar no campo.
+   - Reenvia city, district e state no payload de salvar imóvel.
+
+2) apps/web/app/admin/posts/page.tsx
+   - Corrige falso dirty state no editor do blog.
+   - Normaliza conteúdo vazio do rich text (<p></p> e <p><br></p>) para comparação.
+
+3) apps/web/lib/api.ts
+   - Adiciona fallback/cache leve para detalhe de imóvel.
+   - Reduz 404 falso quando a busca de detalhe falha temporariamente.
+
+4) apps/web/lib/app-release.ts
+   - Atualiza versão para 15.1 e release notes.
+
+Observação:
+- O motivo de o APP_VERSION continuar 15.0 no repositório local é que essa alteração não havia sido aplicada sobre sua cópia Git local.

@@ -1,0 +1,125 @@
+diff --git a/apps/web/app/admin/properties/incluir/page.tsx b/apps/web/app/admin/properties/incluir/page.tsx
+--- /home/user/baseline15/apps/web/app/admin/properties/incluir/page.tsx	2026-06-13 03:28:32.000000000 +0000
++++ /home/user/validation_workspace3/apps/web/app/admin/properties/incluir/page.tsx	2026-06-13 04:06:38.153897743 +0000
+@@ -165,11 +165,11 @@
+ 
+ function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+   return (
+-    <label className="block space-y-2">
++    <div className="block space-y-2">
+       <span className="block text-sm font-medium text-white">{label}</span>
+       {children}
+       {hint ? <span className="block text-xs leading-5 text-zinc-500">{hint}</span> : null}
+-    </label>
++    </div>
+   );
+ }
+ 
+@@ -722,6 +722,9 @@
+         hasPaving: Boolean(form.hasPaving),
+         hasElectricity: Boolean(form.hasElectricity),
+         hasWaterNetwork: Boolean(form.hasWaterNetwork),
++        city: trimmedCity,
++        district: trimmedDistrict,
++        state: String(form.state || 'SC').trim().toUpperCase().slice(0, 2),
+         lotsMinArea,
+         lotsMaxArea: toNumericValue(form.lotsMaxArea),
+         lotsQuantity: toNumericValue(form.lotsQuantity),
+
+diff --git a/apps/web/app/admin/posts/page.tsx b/apps/web/app/admin/posts/page.tsx
+--- /home/user/baseline15/apps/web/app/admin/posts/page.tsx	2026-06-13 03:02:05.000000000 +0000
++++ /home/user/validation_workspace3/apps/web/app/admin/posts/page.tsx	2026-06-13 04:06:45.441897743 +0000
+@@ -59,8 +59,20 @@
+   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+ }
+ 
++function normalizeRichTextForCompare(value: string) {
++  const normalized = String(value || '').trim();
++  return normalized === '<p></p>' || normalized === '<p><br></p>' ? '' : normalized;
++}
++
++function normalizePostFormForCompare(form: PostEditorForm): PostEditorForm {
++  return {
++    ...form,
++    content: normalizeRichTextForCompare(form.content)
++  };
++}
++
+ function isSameForm(a: PostEditorForm, b: PostEditorForm) {
+-  return JSON.stringify(a) === JSON.stringify(b);
++  return JSON.stringify(normalizePostFormForCompare(a)) === JSON.stringify(normalizePostFormForCompare(b));
+ }
+ 
+ function buildPostPayload(form: PostEditorForm) {
+
+diff --git a/apps/web/lib/api.ts b/apps/web/lib/api.ts
+--- /home/user/baseline15/apps/web/lib/api.ts	2026-06-13 03:28:39.000000000 +0000
++++ /home/user/validation_workspace3/apps/web/lib/api.ts	2026-06-13 04:06:56.313897743 +0000
+@@ -178,15 +178,45 @@
+   return layout;
+ };
+ 
++const propertyDetailCache = new Map<string, Property & { related: Property[] }>();
++
++function cachePropertyDetail(property: (Property & { related?: Property[] }) | null | undefined) {
++  if (!property?.slug) return;
++
++  propertyDetailCache.set(property.slug, {
++    ...property,
++    related: Array.isArray(property.related) ? property.related : []
++  });
++}
++
+ export const getProperties = async (query = '') => {
+   const fallback = applyMockPropertyFilter(query);
+   const items = await fetcher<Property[]>(`/properties${query}`, fallback);
+-  return Array.isArray(items) ? items : fallback;
++  const normalized = Array.isArray(items) ? items : fallback;
++  normalized.forEach((item) => cachePropertyDetail(item));
++  return normalized;
+ };
+ 
+ export const getProperty = async (slug: string) => {
+-  const item = await fetcher<(Property & { related: Property[] }) | null>(`/properties/${slug}`, null);
+-  return item || null;
++  const item = await fetcher<(Property & { related: Property[] }) | undefined>(`/properties/${slug}`, undefined);
++
++  if (item) {
++    cachePropertyDetail(item);
++    return item;
++  }
++
++  const listFallback = await getProperties('?limit=200');
++  const matchedFromList = listFallback.find((entry) => entry.slug === slug);
++  if (matchedFromList) {
++    const hydrated = {
++      ...matchedFromList,
++      related: matchedFromList.related || []
++    };
++    cachePropertyDetail(hydrated);
++    return hydrated;
++  }
++
++  return propertyDetailCache.get(slug) || null;
+ };
+ 
+ let propertyLocationOptionsCache: { data: PropertyLocationGroup[]; expiresAt: number } | null = null;
+
+diff --git a/apps/web/lib/app-release.ts b/apps/web/lib/app-release.ts
+--- /home/user/baseline15/apps/web/lib/app-release.ts	2026-06-13 03:29:01.000000000 +0000
++++ /home/user/validation_workspace3/apps/web/lib/app-release.ts	2026-06-13 04:07:05.505897743 +0000
+@@ -1,8 +1,8 @@
+-export const APP_VERSION = '15.0';
+-export const APP_LAST_UPDATED_AT = '2026-06-13 04:55:00 UTC';
++export const APP_VERSION = '15.1';
++export const APP_LAST_UPDATED_AT = '2026-06-13 06:20:00 UTC';
+ export const APP_RELEASE_NOTES = [
+-  'Versão 15.0 atualiza o painel Sobre, o ZIP final e os metadados internos com o mesmo número de release.',
+-  'O formulário de edição de imóvel agora valida manualmente os campos obrigatórios e deixa de exibir o balão nativo “Required” sem indicar claramente o campo pendente.',
+-  'As páginas públicas passaram a cair em fallback seguro quando a API atingir limite temporário, reduzindo telas brancas por exceções server-side.',
+-  'Foi adicionada uma tela global de erro do App Router e o layout raiz passou a tolerar falhas temporárias de sessão sem derrubar o site inteiro.'
++  'Versão 15.1 corrige o clique no editor rico do cadastro de imóveis: o foco volta a abrir o cursor normalmente e o upload de imagem fica restrito ao botão de inserir imagem.',
++  'O cadastro/edição de imóveis voltou a enviar cidade, bairro e UF no payload administrativo, eliminando o erro “Required” ao salvar.',
++  'O aviso de saída do admin agora aparece apenas quando há alterações reais no editor de blog, ignorando a diferença artificial entre conteúdo vazio e o HTML base <p></p>.',
++  'A página pública de imóvel ganhou fallback de detalhe via cache/listagem para reduzir 404 falsos em falhas transitórias de carregamento.'
+ ] as const;

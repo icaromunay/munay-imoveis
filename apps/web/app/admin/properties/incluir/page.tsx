@@ -165,11 +165,11 @@ function isKnownTypeOption(value: string) {
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <label className="block space-y-2">
+    <div className="block space-y-2">
       <span className="block text-sm font-medium text-white">{label}</span>
       {children}
       {hint ? <span className="block text-xs leading-5 text-zinc-500">{hint}</span> : null}
-    </label>
+    </div>
   );
 }
 
@@ -722,6 +722,9 @@ export default function AdminPropertiesPage() {
         hasPaving: Boolean(form.hasPaving),
         hasElectricity: Boolean(form.hasElectricity),
         hasWaterNetwork: Boolean(form.hasWaterNetwork),
+        city: trimmedCity,
+        district: trimmedDistrict,
+        state: String(form.state || 'SC').trim().toUpperCase().slice(0, 2),
         lotsMinArea,
         lotsMaxArea: toNumericValue(form.lotsMaxArea),
         lotsQuantity: toNumericValue(form.lotsQuantity),
