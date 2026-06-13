@@ -574,6 +574,7 @@ export default function AdminPostsPage() {
                     onChange={(nextValue) => updateActiveForm({ content: nextValue })}
                     onUploadImage={(file) => prepareAndUploadAdminImage(file, 'editor')}
                     placeholder="Escreva o artigo com títulos, subtítulos, citações, botões, imagens, tabelas e destaques."
+                    theme="light"
                   />
                 ) : (
                   <textarea

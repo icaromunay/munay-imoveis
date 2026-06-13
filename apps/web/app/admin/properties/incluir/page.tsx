@@ -560,7 +560,6 @@ export default function AdminPropertiesPage() {
     setError('');
     setForm({
       ...emptyForm,
-      ...item,
       title: item.title ?? '',
       shortDescription: item.shortDescription ?? '',
       fullDescription: item.fullDescription ?? '',
@@ -660,9 +659,12 @@ export default function AdminPropertiesPage() {
       const landArea = toNumericValue(form.landArea);
       const lotsMinArea = toNumericValue(form.lotsMinArea);
       const payload = {
-        ...form,
+        title: String(form.title || '').trim(),
+        shortDescription: String(form.shortDescription || '').trim(),
+        fullDescription: String(form.fullDescription || ''),
         category: resolvedCategory,
         type: resolvedType,
+        status: form.status,
         price: Number(form.price),
         promotionalPrice: toNumericValue(form.promotionalPrice),
         area: builtArea ?? landArea ?? lotsMinArea ?? toNumericValue(form.area) ?? 1,
@@ -708,6 +710,17 @@ export default function AdminPropertiesPage() {
         latitude: toNumericValue(form.latitude),
         longitude: toNumericValue(form.longitude),
         propertyCode: String(form.propertyCode || '').trim(),
+        featured: Boolean(form.featured),
+        launch: Boolean(form.launch),
+        approved: Boolean(form.approved),
+        submittedByOwner: false,
+        ownerName: null,
+        ownerPhone: null,
+        ownerEmail: null,
+        googleMapsLink: String(form.googleMapsLink || '').trim(),
+        youtubeLink: String(form.youtubeLink || '').trim(),
+        pdfTableUrl: String(form.pdfTableUrl || '').trim(),
+        pdfProjectUrl: String(form.pdfProjectUrl || '').trim(),
         images: imagePreviews.map((image, index) => ({
           url: image.url,
           alt: `${form.title || 'Imóvel'} - Foto ${index + 1}`
@@ -726,6 +739,14 @@ export default function AdminPropertiesPage() {
       resetForm();
       await load();
     } catch (err) {
+      console.error('[admin-properties] falha ao salvar imóvel', {
+        editingId,
+        error: err,
+        title: form.title,
+        propertyCode: form.propertyCode,
+        category: form.category,
+        type: form.type
+      });
       setError(err instanceof Error ? err.message : 'Não foi possível salvar o imóvel.');
     } finally {
       setLoading(false);

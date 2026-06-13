@@ -207,6 +207,16 @@ const lightEditorTheme: CSSProperties = {
   ['--theme-button-primary-text' as string]: '#0F172A'
 };
 
+const darkEditorTheme: CSSProperties = {
+  ['--theme-institutional-text-primary' as string]: '#F8FAFC',
+  ['--theme-institutional-text-secondary' as string]: '#CBD5E1',
+  ['--theme-institutional-border' as string]: 'rgba(255,255,255,0.1)',
+  ['--theme-institutional-surface' as string]: '#08110D',
+  ['--theme-accent' as string]: '#D4AF72',
+  ['--theme-button-primary-bg' as string]: '#D4AF72',
+  ['--theme-button-primary-text' as string]: '#08110D'
+};
+
 function ToolbarButton({
   active = false,
   onClick,
@@ -242,12 +252,14 @@ export function RichTextEditor({
   value,
   onChange,
   placeholder = 'Escreva o artigo com estrutura editorial profissional...',
-  onUploadImage
+  onUploadImage,
+  theme = 'dark'
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   onUploadImage?: (file: File) => Promise<{ url: string; alt?: string; title?: string; width?: number; height?: number }>;
+  theme?: 'light' | 'dark';
 }) {
   const onChangeRef = useRef(onChange);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -257,6 +269,38 @@ export function RichTextEditor({
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  const isLightTheme = theme === 'light';
+  const wrapperClassName = isLightTheme
+    ? 'overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white'
+    : 'overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#08110d]';
+  const loadingClassName = isLightTheme
+    ? 'min-h-[420px] rounded-[1.5rem] border border-slate-200 bg-white'
+    : 'min-h-[420px] rounded-[1.5rem] border border-white/10 bg-[#08110d]';
+  const toolbarContainerClassName = isLightTheme
+    ? 'flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 p-3'
+    : 'flex flex-wrap items-center gap-2 border-b border-white/10 bg-white/[0.03] p-3';
+  const controlSelectWrapperClassName = isLightTheme
+    ? 'inline-flex items-center rounded-xl border border-slate-200 bg-white px-3'
+    : 'inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-3';
+  const controlSelectClassName = isLightTheme ? 'h-10 bg-transparent text-sm text-slate-700 outline-none' : 'h-10 bg-transparent text-sm text-zinc-100 outline-none';
+  const controlOptionClassName = isLightTheme ? 'bg-white text-slate-900' : 'bg-[#08110d] text-white';
+  const fontToolbarClassName = isLightTheme
+    ? 'flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-3'
+    : 'flex flex-wrap items-center gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3';
+  const fontValueClassName = isLightTheme
+    ? 'inline-flex min-w-[64px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700'
+    : 'inline-flex min-w-[64px] items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-medium text-zinc-200';
+  const paletteToolbarClassName = isLightTheme
+    ? 'flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-3'
+    : 'flex flex-wrap items-center gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3';
+  const paletteLabelClassName = isLightTheme
+    ? 'flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500'
+    : 'flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-400';
+  const imageToolbarClassName = isLightTheme
+    ? 'flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 text-xs uppercase tracking-[0.2em] text-slate-500'
+    : 'flex flex-wrap items-center gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.2em] text-zinc-400';
+  const editorSurfaceTheme = isLightTheme ? lightEditorTheme : darkEditorTheme;
 
   const extensions = useMemo(
     () => [
@@ -296,8 +340,9 @@ export function RichTextEditor({
     content: normalizeHtmlValue(value),
     editorProps: {
       attributes: {
-        class:
-          'rich-text-editor min-h-[420px] rounded-b-[1.5rem] border-x border-b border-slate-200 bg-white px-5 py-5 text-slate-900 focus:outline-none'
+        class: isLightTheme
+          ? 'rich-text-editor min-h-[420px] rounded-b-[1.5rem] border-x border-b border-slate-200 bg-white px-5 py-5 text-slate-900 focus:outline-none'
+          : 'rich-text-editor min-h-[420px] rounded-b-[1.5rem] border-x border-b border-white/10 bg-[#08110d] px-5 py-5 text-zinc-100 focus:outline-none'
       }
     },
     onUpdate: ({ editor: currentEditor }) => {
@@ -411,15 +456,15 @@ export function RichTextEditor({
   }
 
   if (!editor) {
-    return <div className="min-h-[420px] rounded-[1.5rem] border border-slate-200 bg-white" style={lightEditorTheme} />;
+    return <div className={loadingClassName} style={editorSurfaceTheme} />;
   }
 
   return (
-    <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white" style={lightEditorTheme}>
+    <div className={wrapperClassName} style={editorSurfaceTheme}>
       <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={handleImageFileSelection} />
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 p-3">
-        <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3">
+      <div className={toolbarContainerClassName}>
+        <div className={controlSelectWrapperClassName}>
           <select
             aria-label="Formato do texto"
             value={currentHeadingValue}
@@ -431,10 +476,10 @@ export function RichTextEditor({
               }
               editor.chain().focus().setHeading({ level: nextLevel as 1 | 2 | 3 | 4 | 5 | 6 }).run();
             }}
-            className="h-10 bg-transparent text-sm text-slate-700 outline-none"
+            className={controlSelectClassName}
           >
             {headingOptions.map((option) => (
-              <option key={option.value} value={option.value} className="bg-white text-slate-900">
+              <option key={option.value} value={option.value} className={controlOptionClassName}>
                 {option.label}
               </option>
             ))}
@@ -491,8 +536,8 @@ export function RichTextEditor({
         </ToolbarButton>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3">
-        <div className="inline-flex min-w-[64px] items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-medium text-zinc-200">
+      <div className={fontToolbarClassName}>
+        <div className={fontValueClassName}>
           {currentFontSize}px
         </div>
         <ToolbarButton title="Diminuir fonte" onClick={() => editor.chain().focus().setFontSize(`${getNextFontSize(currentFontSize, 'down')}px`).run()}>
@@ -506,8 +551,8 @@ export function RichTextEditor({
         </ToolbarButton>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-400">
+      <div className={paletteToolbarClassName}>
+        <div className={paletteLabelClassName}>
           <PaintBucket size={14} />
           Cor do texto
         </div>
@@ -529,8 +574,8 @@ export function RichTextEditor({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-400">
+      <div className={paletteToolbarClassName}>
+        <div className={paletteLabelClassName}>
           <Highlighter size={14} />
           Destaque
         </div>
@@ -552,7 +597,7 @@ export function RichTextEditor({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.2em] text-zinc-400">
+      <div className={imageToolbarClassName}>
         <div className="flex items-center gap-2">
           <Rows3 size={14} />
           Imagem selecionada
