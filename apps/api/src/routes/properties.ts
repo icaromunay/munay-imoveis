@@ -197,6 +197,43 @@ const listQuerySchema = z.object({
 const ACTIVE_LOCATION_STATUSES = [PropertyStatus.AVAILABLE, PropertyStatus.LAUNCH] as const;
 let propertyLocationOptionsCache: { expiresAt: number; data: Array<{ city: string; total: number; districts: Array<{ district: string; total: number }> }> } | null = null;
 
+type CachedProperty = Awaited<ReturnType<typeof prisma.property.findMany>>[number];
+
+let publicPropertiesCache: CachedProperty[] = [];
+let adminPropertiesCache: CachedProperty[] = [];
+const propertyBySlugCache = new Map<string, CachedProperty>();
+
+function sortCachedProperties(items: CachedProperty[]) {
+  return [...items].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+}
+
+function cachePropertyCollection(items: CachedProperty[], scope: 'public' | 'admin') {
+  const normalized = sortCachedProperties(items);
+
+  if (scope === 'admin') {
+    adminPropertiesCache = normalized;
+    publicPropertiesCache = normalized.filter((item) => item.approved !== false);
+  } else {
+    publicPropertiesCache = normalized.filter((item) => item.approved !== false);
+  }
+
+  normalized.forEach((item) => {
+    propertyBySlugCache.set(item.slug, item);
+  });
+}
+
+function upsertCachedProperty(item: CachedProperty) {
+  propertyBySlugCache.set(item.slug, item);
+  adminPropertiesCache = sortCachedProperties([item, ...adminPropertiesCache.filter((entry) => entry.id !== item.id && entry.slug !== item.slug)]);
+  publicPropertiesCache = sortCachedProperties(adminPropertiesCache.filter((entry) => entry.approved !== false));
+}
+
+function removeCachedProperty(id: string, slug: string) {
+  adminPropertiesCache = adminPropertiesCache.filter((entry) => entry.id !== id);
+  publicPropertiesCache = publicPropertiesCache.filter((entry) => entry.id !== id);
+  propertyBySlugCache.delete(slug);
+}
+
 const propertyViewSchema = z.object({
   visitorKey: z.string().trim().min(16).max(120)
 });
@@ -495,22 +532,50 @@ router.get(
       ]
     };
 
-    const [items, total] = await Promise.all([
-      prisma.property.findMany({
-        where,
-        include: { images: { orderBy: { sortOrder: 'asc' } } },
-        orderBy: [{ launch: 'desc' }, { featured: 'desc' }, { createdAt: 'desc' }],
-        skip: (query.page - 1) * query.limit,
-        take: query.limit
-      }),
-      prisma.property.count({ where })
-    ]);
+    try {
+      const [items, total] = await Promise.all([
+        prisma.property.findMany({
+          where,
+          include: { images: { orderBy: { sortOrder: 'asc' } } },
+          orderBy: [{ launch: 'desc' }, { featured: 'desc' }, { createdAt: 'desc' }],
+          skip: (query.page - 1) * query.limit,
+          take: query.limit
+        }),
+        prisma.property.count({ where })
+      ]);
 
-    res.setHeader('x-pagination-total', total.toString());
-    res.setHeader('x-pagination-page', query.page.toString());
-    res.setHeader('x-pagination-limit', query.limit.toString());
+      if (
+        query.page === 1 &&
+        !query.city &&
+        !query.district &&
+        !query.state &&
+        !query.category &&
+        !query.type &&
+        !query.propertyCode &&
+        !query.status &&
+        !query.launch &&
+        !query.featured &&
+        !query.search &&
+        typeof query.minPrice !== 'number' &&
+        typeof query.maxPrice !== 'number'
+      ) {
+        cachePropertyCollection(items, 'public');
+      }
 
-    res.json(items);
+      res.setHeader('x-pagination-total', total.toString());
+      res.setHeader('x-pagination-page', query.page.toString());
+      res.setHeader('x-pagination-limit', query.limit.toString());
+
+      res.json(items);
+      return;
+    } catch (error) {
+      console.warn('[properties] fallback payload returned after query failure', error);
+      const fallbackItems = publicPropertiesCache.slice((query.page - 1) * query.limit, query.page * query.limit);
+      res.setHeader('x-pagination-total', publicPropertiesCache.length.toString());
+      res.setHeader('x-pagination-page', query.page.toString());
+      res.setHeader('x-pagination-limit', query.limit.toString());
+      res.json(fallbackItems);
+    }
   })
 );
 
@@ -585,12 +650,18 @@ router.get(
   authMiddleware,
   requireRole(BACKOFFICE_ROLES),
   asyncHandler(async (_req, res) => {
-    const items = await prisma.property.findMany({
-      include: { images: { orderBy: { sortOrder: 'asc' } } },
-      orderBy: [{ approved: 'asc' }, { createdAt: 'desc' }]
-    });
+    try {
+      const items = await prisma.property.findMany({
+        include: { images: { orderBy: { sortOrder: 'asc' } } },
+        orderBy: [{ approved: 'asc' }, { createdAt: 'desc' }]
+      });
 
-    res.json(items);
+      cachePropertyCollection(items, 'admin');
+      res.json(items);
+    } catch (error) {
+      console.warn('[properties:admin] fallback payload returned after query failure', error);
+      res.json(adminPropertiesCache);
+    }
   })
 );
 
@@ -1123,59 +1194,75 @@ router.post(
 router.get(
   '/:slug',
   asyncHandler(async (req, res) => {
-    const item = await prisma.property.findFirst({
-      where: { slug: String(req.params.slug), approved: true },
-      include: { images: { orderBy: { sortOrder: 'asc' } } }
-    });
+    const slug = String(req.params.slug);
 
-    if (!item) {
-      throw new AppError(404, 'Imóvel não encontrado.');
-    }
-
-    const sameCity = await prisma.property.findMany({
-      where: {
-        id: { not: item.id },
-        city: item.city,
-        approved: true
-      },
-      include: { images: { orderBy: { sortOrder: 'asc' } } },
-      take: 18,
-      orderBy: [{ featured: 'desc' }, { launch: 'desc' }, { createdAt: 'desc' }]
-    });
-
-    const related = sameCity
-      .sort((a, b) => {
-        const score = (entry: typeof a) => {
-          let total = 0;
-          if (entry.district === item.district) total += 6;
-          if (entry.type === item.type) total += 4;
-          if (entry.category === item.category) total += 3;
-          if (entry.featured) total += 2;
-          if (entry.launch || entry.status === PropertyStatus.LAUNCH) total += 1;
-          return total;
-        };
-
-        return score(b) - score(a);
-      })
-      .slice(0, 3);
-
-    if (related.length < 3) {
-      const existingIds = new Set([item.id, ...related.map((entry) => entry.id)]);
-      const launches = await prisma.property.findMany({
-        where: {
-          id: { notIn: Array.from(existingIds) },
-          approved: true,
-          OR: [{ launch: true }, { status: PropertyStatus.LAUNCH }]
-        },
-        include: { images: { orderBy: { sortOrder: 'asc' } } },
-        take: 3 - related.length,
-        orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }]
+    try {
+      const item = await prisma.property.findFirst({
+        where: { slug, approved: true },
+        include: { images: { orderBy: { sortOrder: 'asc' } } }
       });
 
-      related.push(...launches);
-    }
+      if (!item) {
+        throw new AppError(404, 'Imóvel não encontrado.');
+      }
 
-    res.json({ ...item, related: related.slice(0, 3) });
+      const sameCity = await prisma.property.findMany({
+        where: {
+          id: { not: item.id },
+          city: item.city,
+          approved: true
+        },
+        include: { images: { orderBy: { sortOrder: 'asc' } } },
+        take: 18,
+        orderBy: [{ featured: 'desc' }, { launch: 'desc' }, { createdAt: 'desc' }]
+      });
+
+      const related = sameCity
+        .sort((a, b) => {
+          const score = (entry: typeof a) => {
+            let total = 0;
+            if (entry.district === item.district) total += 6;
+            if (entry.type === item.type) total += 4;
+            if (entry.category === item.category) total += 3;
+            if (entry.featured) total += 2;
+            if (entry.launch || entry.status === PropertyStatus.LAUNCH) total += 1;
+            return total;
+          };
+
+          return score(b) - score(a);
+        })
+        .slice(0, 3);
+
+      if (related.length < 3) {
+        const existingIds = new Set([item.id, ...related.map((entry) => entry.id)]);
+        const launches = await prisma.property.findMany({
+          where: {
+            id: { notIn: Array.from(existingIds) },
+            approved: true,
+            OR: [{ launch: true }, { status: PropertyStatus.LAUNCH }]
+          },
+          include: { images: { orderBy: { sortOrder: 'asc' } } },
+          take: 3 - related.length,
+          orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }]
+        });
+
+        related.push(...launches);
+      }
+
+      const payload = { ...item, related: related.slice(0, 3) };
+      propertyBySlugCache.set(item.slug, payload);
+      res.json(payload);
+      return;
+    } catch (error) {
+      const cached = propertyBySlugCache.get(slug) || null;
+      if (cached) {
+        console.warn('[properties:slug] cached payload returned after query failure', error);
+        res.json(cached);
+        return;
+      }
+
+      throw error;
+    }
   })
 );
 
@@ -1202,6 +1289,8 @@ router.post(
       },
       include: { images: true }
     });
+
+    upsertCachedProperty(created);
 
     if (created.approved) {
       void notifyIndexNowPath(getPropertyPublicPath(created));
@@ -1246,6 +1335,8 @@ router.put(
       include: { images: true }
     });
 
+    upsertCachedProperty(updated);
+
     if (updated.approved) {
       void notifyIndexNowPath(getPropertyPublicPath(updated));
     }
@@ -1268,6 +1359,7 @@ router.delete(
     }
 
     await prisma.property.delete({ where: { id: existing.id } });
+    removeCachedProperty(existing.id, existing.slug);
     void revalidateSitePaths(buildPropertyRevalidationPaths(existing));
     res.status(204).send();
   })

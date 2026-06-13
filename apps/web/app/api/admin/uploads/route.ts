@@ -7,7 +7,7 @@ import { requireAdminRoute } from '@/lib/admin-route';
 const uploadSchema = z.object({
   dataUrl: z.string().trim().min(20, 'Imagem inválida.'),
   fileName: z.string().trim().min(1).default('imagem'),
-  folder: z.enum(['blog-cover', 'editor', 'property-description']).default('editor'),
+  folder: z.enum(['blog-cover', 'editor', 'property-description', 'property-gallery']).default('editor'),
   width: z.coerce.number().int().positive().optional(),
   height: z.coerce.number().int().positive().optional()
 });

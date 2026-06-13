@@ -40,6 +40,47 @@ const querySchema = z.object({
   published: z.enum(['true', 'false']).optional()
 });
 
+type CachedPost = Awaited<ReturnType<typeof prisma.post.findMany>>[number];
+
+let publicPostsCache: CachedPost[] = [];
+let adminPostsCache: CachedPost[] = [];
+const postsBySlugCache = new Map<string, CachedPost>();
+
+function sortPosts(items: CachedPost[]) {
+  return [...items].sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+}
+
+function cachePosts(items: CachedPost[], scope: 'public' | 'admin') {
+  const normalized = sortPosts(items);
+
+  if (scope === 'admin') {
+    adminPostsCache = normalized;
+    publicPostsCache = normalized.filter((item) => item.published);
+  } else {
+    publicPostsCache = normalized;
+  }
+
+  normalized.forEach((item) => {
+    postsBySlugCache.set(item.slug, item);
+  });
+}
+
+function upsertCachedPost(item: CachedPost) {
+  postsBySlugCache.set(item.slug, item);
+  adminPostsCache = sortPosts([item, ...adminPostsCache.filter((entry) => entry.id !== item.id && entry.slug !== item.slug)]);
+  publicPostsCache = sortPosts(adminPostsCache.filter((entry) => entry.published));
+}
+
+function removeCachedPost(id: string) {
+  const removed = adminPostsCache.find((entry) => entry.id === id);
+  adminPostsCache = adminPostsCache.filter((entry) => entry.id !== id);
+  publicPostsCache = sortPosts(adminPostsCache.filter((entry) => entry.published));
+
+  if (removed) {
+    postsBySlugCache.delete(removed.slug);
+  }
+}
+
 async function resolveUniquePostSlug(title: string, excludeId?: string) {
   const baseSlug = makeSlug(title) || `artigo-${Date.now()}`;
   let candidate = baseSlug;
@@ -69,20 +110,36 @@ router.get(
       published: query.published ? query.published === 'true' : true
     };
 
-    const [items, total] = await Promise.all([
-      prisma.post.findMany({
-        where,
-        orderBy: [{ published: 'desc' }, { createdAt: 'desc' }],
-        skip: (query.page - 1) * query.limit,
-        take: query.limit
-      }),
-      prisma.post.count({ where })
-    ]);
+    try {
+      const [items, total] = await Promise.all([
+        prisma.post.findMany({
+          where,
+          orderBy: [{ published: 'desc' }, { createdAt: 'desc' }],
+          skip: (query.page - 1) * query.limit,
+          take: query.limit
+        }),
+        prisma.post.count({ where })
+      ]);
 
-    res.setHeader('x-pagination-total', total.toString());
-    res.setHeader('x-pagination-page', query.page.toString());
-    res.setHeader('x-pagination-limit', query.limit.toString());
-    res.json(items);
+      if (query.page === 1) {
+        cachePosts(items, 'public');
+      }
+
+      res.setHeader('x-pagination-total', total.toString());
+      res.setHeader('x-pagination-page', query.page.toString());
+      res.setHeader('x-pagination-limit', query.limit.toString());
+      res.json(items);
+      return;
+    } catch (error) {
+      console.warn('[posts] fallback payload returned after query failure', error);
+      const fallbackSource = query.published === 'false' ? adminPostsCache.filter((item) => !item.published) : publicPostsCache;
+      const start = (query.page - 1) * query.limit;
+      const fallbackItems = fallbackSource.slice(start, start + query.limit);
+      res.setHeader('x-pagination-total', fallbackSource.length.toString());
+      res.setHeader('x-pagination-page', query.page.toString());
+      res.setHeader('x-pagination-limit', query.limit.toString());
+      res.json(fallbackItems);
+    }
   })
 );
 
@@ -91,8 +148,14 @@ router.get(
   authMiddleware,
   requireRole(BACKOFFICE_ROLES),
   asyncHandler(async (_req, res) => {
-    const items = await prisma.post.findMany({ orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }] });
-    res.json(items);
+    try {
+      const items = await prisma.post.findMany({ orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }] });
+      cachePosts(items, 'admin');
+      res.json(items);
+    } catch (error) {
+      console.warn('[posts:admin] fallback payload returned after query failure', error);
+      res.json(adminPostsCache);
+    }
   })
 );
 
@@ -121,6 +184,7 @@ router.post(
       }
     });
 
+    upsertCachedPost(created);
     res.status(201).json(created);
   })
 );
@@ -128,13 +192,28 @@ router.post(
 router.get(
   '/:slug',
   asyncHandler(async (req, res) => {
-    const item = await prisma.post.findUnique({ where: { slug: String(req.params.slug) } });
+    const slug = String(req.params.slug);
 
-    if (!item) {
-      throw new AppError(404, 'Post não encontrado.');
+    try {
+      const item = await prisma.post.findUnique({ where: { slug } });
+
+      if (!item) {
+        throw new AppError(404, 'Post não encontrado.');
+      }
+
+      postsBySlugCache.set(item.slug, item);
+      res.json(item);
+      return;
+    } catch (error) {
+      const cached = postsBySlugCache.get(slug) || publicPostsCache.find((item) => item.slug === slug) || null;
+      if (cached) {
+        console.warn('[posts:slug] cached payload returned after query failure', error);
+        res.json(cached);
+        return;
+      }
+
+      throw error;
     }
-
-    res.json(item);
   })
 );
 
@@ -163,6 +242,8 @@ router.post(
         slug: await resolveUniquePostSlug(parsed.data.title)
       }
     });
+
+    upsertCachedPost(created);
 
     if (created.published) {
       void notifyIndexNowPath(`/blog/${created.slug}`);
@@ -199,6 +280,8 @@ router.put(
       }
     });
 
+    upsertCachedPost(updated);
+
     if (updated.published) {
       void notifyIndexNowPath(`/blog/${updated.slug}`);
     }
@@ -212,7 +295,9 @@ router.delete(
   authMiddleware,
   requireRole(BACKOFFICE_ROLES),
   asyncHandler(async (req, res) => {
-    await prisma.post.delete({ where: { id: String(req.params.id) } });
+    const id = String(req.params.id);
+    await prisma.post.delete({ where: { id } });
+    removeCachedPost(id);
     res.status(204).send();
   })
 );

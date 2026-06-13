@@ -300,13 +300,37 @@ export async function getViewsDashboard(query = '') {
   return response.json() as Promise<ViewsDashboardData>;
 }
 
+const postsBySlugCache = new Map<string, Post>();
+let postsListCache: Post[] = [];
+
+function cachePosts(items: Post[]) {
+  postsListCache = Array.isArray(items) ? items : [];
+  postsListCache.forEach((item) => {
+    postsBySlugCache.set(item.slug, item);
+  });
+}
+
 export const getPosts = async () => {
-  const items = await fetcher<Post[]>('/posts', mockPosts);
-  return Array.isArray(items) ? items : mockPosts;
+  const fallback = postsListCache.length ? postsListCache : mockPosts;
+  const items = await fetcher<Post[]>('/posts', fallback);
+  const normalized = Array.isArray(items) ? items : fallback;
+  cachePosts(normalized);
+  return normalized;
 };
 
-export const getPost = async (slug: string) =>
-  fetcher<Post | null>(`/posts/${slug}`, mockPosts.find((item) => item.slug === slug) || null);
+export const getPost = async (slug: string) => {
+  const fallback = postsBySlugCache.get(slug) || postsListCache.find((item) => item.slug === slug) || mockPosts.find((item) => item.slug === slug) || null;
+  const item = await fetcher<Post | null>(`/posts/${slug}`, fallback);
+
+  if (item) {
+    postsBySlugCache.set(item.slug, item);
+    if (!postsListCache.some((entry) => entry.slug === item.slug)) {
+      postsListCache = [item, ...postsListCache];
+    }
+  }
+
+  return item;
+};
 
 export const getTestimonials = async () => {
   const items = await fetcher<Testimonial[]>('/testimonials', mockTestimonials);

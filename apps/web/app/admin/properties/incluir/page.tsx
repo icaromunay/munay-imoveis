@@ -21,7 +21,7 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { adminFetch } from '@/lib/admin';
 import { prepareAndUploadAdminImage } from '@/lib/admin-media';
-import { prepareImageFile, PreparedImage } from '@/lib/image-upload';
+import { PreparedImage } from '@/lib/image-upload';
 import { Property } from '@/lib/types';
 import { categoryLabel, formatCurrency, statusLabel } from '@/lib/format';
 import {
@@ -512,34 +512,49 @@ export default function AdminPropertiesPage() {
 
     try {
       const selectedFiles = files.slice(0, remainingSlots);
-      const preparedImages: PreparedImage[] = [];
+      const uploadedImages: PreparedImage[] = [];
 
       for (let index = 0; index < selectedFiles.length; index += 1) {
         const file = selectedFiles[index];
-        const prepared = await prepareImageFile(file, (progress) => {
-          const percent = Math.max(1, Math.min(100, Math.round(((index + progress.percent / 100) / selectedFiles.length) * 100)));
-          setUploadProgress({
-            percent,
-            current: index + 1,
-            total: selectedFiles.length,
-            currentFile: progress.fileName,
-            stage: progress.stage
-          });
+        setUploadProgress({
+          percent: Math.max(1, Math.round((index / selectedFiles.length) * 100)),
+          current: index + 1,
+          total: selectedFiles.length,
+          currentFile: file.name,
+          stage: 'Otimizando e enviando para a biblioteca interna'
         });
-        preparedImages.push(prepared);
+
+        const uploaded = await prepareAndUploadAdminImage(file, 'property-gallery');
+        uploadedImages.push({
+          id: crypto.randomUUID(),
+          url: uploaded.url,
+          name: file.name,
+          format: uploaded.contentType.includes('webp') ? 'webp' : uploaded.contentType.includes('jpeg') || uploaded.contentType.includes('jpg') ? 'jpg' : 'original',
+          width: uploaded.width,
+          height: uploaded.height,
+          sizeKb: 0
+        });
+
+        setUploadProgress({
+          percent: Math.max(1, Math.min(100, Math.round(((index + 1) / selectedFiles.length) * 100))),
+          current: index + 1,
+          total: selectedFiles.length,
+          currentFile: file.name,
+          stage: 'Imagem persistida com sucesso'
+        });
       }
 
-      setImagePreviews((current) => [...current, ...preparedImages].slice(0, 20));
+      setImagePreviews((current) => [...current, ...uploadedImages].slice(0, 20));
       setUploadProgress({
         percent: 100,
         current: selectedFiles.length,
         total: selectedFiles.length,
         currentFile: selectedFiles[selectedFiles.length - 1]?.name || '',
-        stage: 'Upload preparado com imagens otimizadas'
+        stage: 'Upload concluído e persistido'
       });
-      setMessage(`${Math.min(files.length, remainingSlots)} foto(s) preparada(s). JPG/PNG foram convertidos para WEBP, miniaturas serão geradas automaticamente e o upload final ficará otimizado.`);
+      setMessage(`${Math.min(files.length, remainingSlots)} foto(s) enviada(s) e persistida(s) com sucesso.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível preparar as imagens.');
+      setError(err instanceof Error ? err.message : 'Não foi possível enviar as imagens.');
       setUploadProgress(null);
     } finally {
       setUploadingImages(false);

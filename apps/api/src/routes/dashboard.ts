@@ -28,6 +28,8 @@ function buildDashboardFallback() {
   };
 }
 
+let lastDashboardPayload: ReturnType<typeof buildDashboardFallback> | null = null;
+
 router.get(
   '/',
   authMiddleware,
@@ -150,7 +152,7 @@ router.get(
       viewCount: item.viewCount || 0
     }));
 
-      res.json({
+      const payload = {
         properties,
         developments,
         owners: ownerRows.length,
@@ -168,10 +170,13 @@ router.get(
         recentProperties,
         recentLeads,
         recentAccesses
-      });
+      };
+
+      lastDashboardPayload = payload;
+      res.json(payload);
     } catch (error) {
       console.warn('[dashboard] fallback payload returned after query failure', error);
-      res.json(buildDashboardFallback());
+      res.json(lastDashboardPayload || buildDashboardFallback());
     }
   })
 );

@@ -1,0 +1,26 @@
+Portal Munay - pacote 15.2
+Base: 15.1
+
+Objetivo desta entrega:
+- corrigir persistência das fotos na edição/cadastro de imóveis
+- reduzir falhas de leitura da API no admin e no blog público usando fallback com último payload válido
+
+Arquivos alterados:
+- apps/api/src/routes/dashboard.ts
+- apps/api/src/routes/posts.ts
+- apps/api/src/routes/properties.ts
+- apps/web/app/admin/properties/incluir/page.tsx
+- apps/web/app/api/admin/uploads/route.ts
+- apps/web/lib/admin-media.ts
+- apps/web/lib/api.ts
+- apps/web/lib/app-release.ts
+
+Resumo técnico:
+- propriedades do admin agora fazem upload imediato das fotos para /uploads/property-gallery antes do salvamento do imóvel
+- API de uploads passou a aceitar a pasta property-gallery
+- dashboard, posts e properties ganharam fallback em memória no backend para leituras após falhas transitórias de banco/API
+- frontend do blog passou a priorizar cache local antes dos posts mockados
+- APP_VERSION atualizado para 15.2
+
+Observação:
+- este pacote foi limpo para deploy e não inclui node_modules, .next, dist e scripts temporários
