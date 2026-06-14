@@ -161,7 +161,7 @@ function getRichTextPlainText(value: string) {
 
 function ensureImageUrlLoads(url: string) {
   return new Promise<void>((resolve, reject) => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || url.startsWith('data:image/')) {
       resolve();
       return;
     }

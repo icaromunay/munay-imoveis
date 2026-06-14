@@ -1,0 +1,11 @@
+Pacote 15.4 — correção do falso erro no upload da galeria
+
+Correção aplicada:
+- Ajustada a validação de imagens do admin para aceitar prévias locais em data:image sem tratá-las como URL pública do servidor.
+- Corrigido o erro "A imagem enviada não ficou acessível no servidor" durante a seleção das fotos.
+- As imagens voltam a entrar na galeria imediatamente após a seleção, antes do salvamento.
+- Mantido o fluxo correto: as fotos do imóvel são persistidas no backend apenas ao salvar o cadastro.
+
+Arquivos alterados:
+- apps/web/app/admin/properties/incluir/page.tsx
+- apps/web/lib/app-release.ts

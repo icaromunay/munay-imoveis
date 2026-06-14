@@ -1,8 +1,8 @@
-export const APP_VERSION = '15.3';
-export const APP_LAST_UPDATED_AT = '2026-06-14 00:00:00 UTC';
+export const APP_VERSION = '15.4';
+export const APP_LAST_UPDATED_AT = '2026-06-14 00:45:00 UTC';
 export const APP_RELEASE_NOTES = [
-  'Versão 15.3 volta a usar pré-visualização local para a galeria do imóvel e só persiste as fotos no backend ao salvar o cadastro, eliminando miniaturas quebradas no admin.',
-  'A galeria do imóvel deixou de depender da rota separada do app web: blog, editor e descrição continuam com upload dedicado, mas as fotos do anúncio seguem um fluxo único pelo backend de imóveis.',
-  'O backend passou a reaproveitar a primeira imagem persistida como capa quando ela já vem da galeria, evitando gravação duplicada e desencontro entre capa e fotos.',
-  'O pacote mantém os fallbacks de leitura da API introduzidos na 15.2 para imóveis, dashboard e blog.'
+  'Versão 15.4 corrige a validação de upload da galeria: prévias locais em data:image voltam a ser aceitas imediatamente no admin, sem o falso erro de imagem inacessível.',
+  'A checagem de acessibilidade continua ativa apenas para URLs reais do servidor, preservando a proteção contra arquivos quebrados depois do salvamento.',
+  'A galeria do imóvel segue persistindo as fotos no backend apenas ao salvar o cadastro, mantendo o fluxo único de gravação das imagens do anúncio.',
+  'O pacote mantém as correções da 15.3 e os fallbacks de leitura da API para imóveis, dashboard e blog.'
 ] as const;
