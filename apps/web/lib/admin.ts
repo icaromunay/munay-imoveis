@@ -35,6 +35,30 @@ function parseTokenExpiry(expiresAt: string | undefined, fallbackMs: number) {
   return Number.isFinite(parsed) ? parsed : Date.now() + fallbackMs;
 }
 
+function normalizeUploadUrls<T>(payload: T): T {
+  if (typeof payload === 'string') {
+    if (payload.startsWith('/uploads/')) {
+      return `/api${payload}` as T;
+    }
+
+    return payload
+      .replace(/src=(["'])\/uploads\//g, 'src=$1/api/uploads/')
+      .replace(/href=(["'])\/uploads\//g, 'href=$1/api/uploads/') as T;
+  }
+
+  if (Array.isArray(payload)) {
+    return payload.map((item) => normalizeUploadUrls(item)) as T;
+  }
+
+  if (payload && typeof payload === 'object') {
+    return Object.fromEntries(
+      Object.entries(payload as Record<string, unknown>).map(([key, value]) => [key, normalizeUploadUrls(value)])
+    ) as T;
+  }
+
+  return payload;
+}
+
 export const getToken = () => cachedToken?.token ?? null;
 
 export function clearToken(reason = 'manual-clear') {
@@ -202,5 +226,6 @@ export async function adminFetch(path: string, init?: RequestInit, retry = true)
   });
 
   if (response.status === 204) return null;
-  return response.json();
+  const payload = await response.json();
+  return normalizeUploadUrls(payload);
 }

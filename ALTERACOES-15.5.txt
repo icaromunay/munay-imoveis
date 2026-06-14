@@ -1,0 +1,23 @@
+Pacote 15.5 — correção de caminho de mídia e validação numérica
+
+Diagnóstico confirmado no código:
+- As imagens persistidas do imóvel eram gravadas pelo backend em apps/web/public/uploads/properties.
+- O backend servia esse diretório em /uploads, mas o ambiente público usa a API atrás de /api; isso pode fazer /uploads cair no app web/proxy errado.
+- Resultado: as fotos podem até ser salvas no disco, mas não ficam acessíveis pela URL que o site/admin consome.
+
+Correções aplicadas:
+- Alias estático adicionado no backend: /api/uploads -> mesmo diretório de uploads.
+- Persistência de fotos de imóveis agora retorna /api/uploads/properties/... em vez de /uploads/properties/....
+- Respostas antigas com /uploads/... são normalizadas automaticamente para /api/uploads/... no admin e no site público.
+- Campos numéricos opcionais com 0 ou vazio agora viram null no schema, corrigindo o erro "Number must be greater than 0" no cadastro.
+- Mantida a conversão JPG/PNG para WEBP no backend de imóveis com Sharp.
+
+Arquivos alterados:
+- apps/api/src/app.ts
+- apps/api/src/utils/property-images.ts
+- apps/api/src/routes/properties.ts
+- apps/web/app/api/admin/uploads/route.ts
+- apps/web/lib/admin.ts
+- apps/web/lib/api.ts
+- apps/web/lib/image.ts
+- apps/web/lib/app-release.ts

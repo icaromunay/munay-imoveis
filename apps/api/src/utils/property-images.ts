@@ -72,7 +72,7 @@ async function optimizeAndPersistImageData(value: string) {
 
   await Promise.all([writeFile(mainPath, mainBuffer), writeFile(thumbPath, thumbBuffer)]);
 
-  return `/uploads/properties/${year}/${month}/${mainFileName}`;
+  return `/api/uploads/properties/${year}/${month}/${mainFileName}`;
 }
 
 export async function persistImageValue(value?: string | null) {

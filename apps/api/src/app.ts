@@ -104,20 +104,20 @@ export function createApp() {
 
     next();
   });
-  app.use(
-    '/uploads',
-    express.static(uploadsPath, {
-      etag: true,
-      maxAge: env.NODE_ENV === 'production' ? '7d' : '1h',
-      immutable: env.NODE_ENV === 'production',
-      setHeaders(res) {
-        res.setHeader(
-          'Cache-Control',
-          env.NODE_ENV === 'production' ? 'public, max-age=604800, immutable' : 'public, max-age=3600, stale-while-revalidate=86400'
-        );
-      }
-    })
-  );
+  const uploadsStaticMiddleware = express.static(uploadsPath, {
+    etag: true,
+    maxAge: env.NODE_ENV === 'production' ? '7d' : '1h',
+    immutable: env.NODE_ENV === 'production',
+    setHeaders(res) {
+      res.setHeader(
+        'Cache-Control',
+        env.NODE_ENV === 'production' ? 'public, max-age=604800, immutable' : 'public, max-age=3600, stale-while-revalidate=86400'
+      );
+    }
+  });
+
+  app.use('/uploads', uploadsStaticMiddleware);
+  app.use('/api/uploads', uploadsStaticMiddleware);
   app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   app.use('/api', globalRateLimiter);
 

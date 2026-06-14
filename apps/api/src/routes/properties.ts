@@ -23,6 +23,7 @@ const imageValueSchema = z
   .refine((value) => {
     if (value.startsWith('data:image/')) return true;
     if (value.startsWith('/uploads/')) return true;
+    if (value.startsWith('/api/uploads/')) return true;
 
     try {
       const parsed = new URL(value);
@@ -35,6 +36,8 @@ const imageValueSchema = z
 const emptyToNullImage = imageValueSchema.optional().nullable().or(z.literal(''));
 const emptyToNullUrl = z.string().trim().url().optional().nullable().or(z.literal(''));
 const emptyToUndefinedString = z.string().trim().optional().nullable().or(z.literal(''));
+const optionalPositiveIntSchema = z.preprocess((value) => (value === '' || value === '0' || value === 0 ? null : value), z.coerce.number().int().positive().optional().nullable());
+const optionalPositiveNumberSchema = z.preprocess((value) => (value === '' || value === '0' || value === 0 ? null : value), z.coerce.number().positive().optional().nullable());
 
 const propertySchema = z
   .object({
@@ -42,12 +45,12 @@ const propertySchema = z
     shortDescription: z.string().trim().min(10),
     fullDescription: z.string().trim().min(20),
     price: z.coerce.number().positive(),
-    promotionalPrice: z.coerce.number().positive().optional().nullable(),
+    promotionalPrice: optionalPositiveNumberSchema,
     status: z.nativeEnum(PropertyStatus).default(PropertyStatus.AVAILABLE),
     propertyCode: emptyToUndefinedString,
     area: z.coerce.number().int().positive().optional().default(1),
-    landArea: z.coerce.number().int().positive().optional().nullable(),
-    builtArea: z.coerce.number().int().positive().optional().nullable(),
+    landArea: optionalPositiveIntSchema,
+    builtArea: optionalPositiveIntSchema,
     bedrooms: z.coerce.number().int().optional().nullable(),
     bathrooms: z.coerce.number().int().optional().nullable(),
     suites: z.coerce.number().int().optional().nullable(),
@@ -56,7 +59,7 @@ const propertySchema = z
     hasElevator: z.boolean().default(false),
     solarPosition: z.string().trim().optional().nullable().or(z.literal('')),
     hasEdicule: z.boolean().default(false),
-    ediculeArea: z.coerce.number().int().positive().optional().nullable(),
+    ediculeArea: optionalPositiveIntSchema,
     ediculeBedrooms: z.coerce.number().int().optional().nullable(),
     ediculeBathrooms: z.coerce.number().int().optional().nullable(),
     ediculeHasLivingRoom: z.boolean().default(false),
@@ -67,11 +70,11 @@ const propertySchema = z
     acceptsExchange: z.boolean().default(false),
     acceptsProposal: z.boolean().default(false),
     acceptsDirectInstallments: z.boolean().default(false),
-    maxDirectInstallments: z.coerce.number().int().positive().optional().nullable(),
+    maxDirectInstallments: optionalPositiveIntSchema,
     constructionYear: z.coerce.number().int().min(1800).max(2100).optional().nullable(),
-    landFrontage: z.coerce.number().positive().optional().nullable(),
-    landDepthLeft: z.coerce.number().positive().optional().nullable(),
-    landDepthRight: z.coerce.number().positive().optional().nullable(),
+    landFrontage: optionalPositiveNumberSchema,
+    landDepthLeft: optionalPositiveNumberSchema,
+    landDepthRight: optionalPositiveNumberSchema,
     hasPaving: z.boolean().default(false),
     hasElectricity: z.boolean().default(false),
     hasWaterNetwork: z.boolean().default(false),
@@ -80,16 +83,16 @@ const propertySchema = z
     state: z.string().trim().min(2),
     category: z.nativeEnum(PropertyCategory),
     type: z.string().trim().min(2),
-    lotsMinArea: z.coerce.number().int().positive().optional().nullable(),
-    lotsMaxArea: z.coerce.number().int().positive().optional().nullable(),
-    lotsQuantity: z.coerce.number().int().positive().optional().nullable(),
+    lotsMinArea: optionalPositiveIntSchema,
+    lotsMaxArea: optionalPositiveIntSchema,
+    lotsQuantity: optionalPositiveIntSchema,
     developmentInfrastructure: z.string().trim().optional().nullable().or(z.literal('')),
     developmentHasPaving: z.boolean().default(false),
     developmentHasElectricity: z.boolean().default(false),
     developmentHasWaterNetwork: z.boolean().default(false),
     readyToBuild: z.boolean().default(false),
     hasDevelopmentInstallments: z.boolean().default(false),
-    developmentMaxInstallments: z.coerce.number().int().positive().optional().nullable(),
+    developmentMaxInstallments: optionalPositiveIntSchema,
     featured: z.boolean().default(false),
     launch: z.boolean().default(false),
     approved: z.boolean().default(true),

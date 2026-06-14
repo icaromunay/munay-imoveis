@@ -22,7 +22,7 @@ export function optimizeImageUrl(url: string, width = 1200, quality = 75) {
 export function getPropertyThumbnailUrl(url: string) {
   if (!url) return url;
 
-  if (url.startsWith('/uploads/properties/')) {
+  if (url.startsWith('/uploads/properties/') || url.startsWith('/api/uploads/properties/')) {
     // Hotfix de compatibilidade: imóveis antigos podem não ter o arquivo
     // físico "-thumb.webp". Nesses casos, usar a imagem principal evita
     // quebrar a ficha do imóvel e os cards enquanto preservamos compatibilidade.

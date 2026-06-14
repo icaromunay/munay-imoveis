@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     const publicRoots = resolveUploadsDirectories();
     const safeBaseName = sanitizeBaseName(fileName);
     const finalFileName = `${Date.now()}-${crypto.randomUUID()}-${safeBaseName}.${extension}`;
-    const publicUrl = `/uploads/${folder}/${year}/${month}/${finalFileName}`;
+    const publicUrl = `/api/uploads/${folder}/${year}/${month}/${finalFileName}`;
 
     await Promise.all(
       publicRoots.map(async (publicRoot) => {

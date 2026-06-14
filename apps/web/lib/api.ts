@@ -48,6 +48,30 @@ function logFrontendFetch(path: string, duration: number, status: 'ok' | 'fallba
   }
 }
 
+function normalizeUploadUrls<T>(payload: T): T {
+  if (typeof payload === 'string') {
+    if (payload.startsWith('/uploads/')) {
+      return `/api${payload}` as T;
+    }
+
+    return payload
+      .replace(/src=(["'])\/uploads\//g, 'src=$1/api/uploads/')
+      .replace(/href=(["'])\/uploads\//g, 'href=$1/api/uploads/') as T;
+  }
+
+  if (Array.isArray(payload)) {
+    return payload.map((item) => normalizeUploadUrls(item)) as T;
+  }
+
+  if (payload && typeof payload === 'object') {
+    return Object.fromEntries(
+      Object.entries(payload as Record<string, unknown>).map(([key, value]) => [key, normalizeUploadUrls(value)])
+    ) as T;
+  }
+
+  return payload;
+}
+
 async function fetcher<T>(path: string, fallback: T, options?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -75,7 +99,8 @@ async function fetcher<T>(path: string, fallback: T, options?: RequestInit): Pro
 
     const duration = Date.now() - startedAt;
     logFrontendFetch(path, duration, 'ok');
-    return response.json();
+    const payload = await response.json();
+    return normalizeUploadUrls(payload);
   } catch (error) {
     clearTimeout(timeout);
     const duration = Date.now() - startedAt;
