@@ -1,0 +1,79 @@
+VERSAO: 15.6
+DATA: 2026-06-14 02:10:00 UTC
+
+CAUSA RAIZ ENCONTRADA
+1. Havia divergencia entre o caminho canonico prometido pela aplicacao e o caminho realmente retornado pelo codigo.
+2. O backend de persistencia de fotos do imovel (apps/api/src/utils/property-images.ts) ainda retornava /uploads/properties/... embora a estrategia publica mais segura fosse /api/uploads/properties/...
+3. A rota Next de upload administrativo (apps/web/app/api/admin/uploads/route.ts) tambem retornava /uploads/... em vez de /api/uploads/...
+4. O frontend (apps/web/lib/admin.ts e apps/web/lib/api.ts) estava normalizando no sentido inverso: convertia /api/uploads/... para /uploads/..., reintroduzindo a URL fragil no admin e no site publico.
+5. Isso criava divergencia entre:
+   - URL salva/persistida
+   - URL retornada pela API
+   - URL usada no frontend
+   - caminho fisico real do arquivo
+6. Em ambientes em que o proxy publico privilegia /api, qualquer retorno para /uploads/... pode gerar imagem quebrada mesmo com o arquivo existente no disco.
+
+VERIFICACAO DAS ETAPAS SOLICITADAS
+1. URL exata gerada apos a correcao no teste real:
+   /api/uploads/properties/2026/06/1781415429884-6b729c9c-536e-475c-9018-ec2753ef90f4.webp
+2. Caminho fisico correspondente no disco no teste real:
+   /home/user/validation_workspace3/apps/web/public/uploads/properties/2026/06/1781415429884-6b729c9c-536e-475c-9018-ec2753ef90f4.webp
+3. Confirmacao de existencia fisica: existsOnDisk = true
+4. Confirmacao de serving pelo backend:
+   - GET /api/uploads/... => 200 image/webp
+   - GET /uploads/... => 200 image/webp (compatibilidade legada)
+5. Alteracao recente confirmada: release note 15.5 dizia /api/uploads, mas o codigo ainda emitia /uploads em pontos criticos.
+6. Diferencas encontradas antes da correcao:
+   - Persistencia backend: /uploads/properties/...
+   - Upload admin route: /uploads/{folder}/...
+   - Frontend admin/publico: reescrevia /api/uploads para /uploads
+   - Disco: apps/web/public/uploads/...
+   Depois da correcao, tudo converge para /api/uploads/... como URL publica canonica, mantendo /uploads/... somente como fallback legado de proxy/compatibilidade.
+7. Analise de erros de caminho:
+   - caminho relativo: OK apos normalizacao canonica
+   - caminho absoluto: nao havia necessidade; URLs sao relativas ao dominio
+   - barra dupla //: tratada pela normalizacao
+   - dominio/protocolo incorreto: nao identificado nas URLs relativas
+   - diretorio incorreto: nao; arquivos ficam em apps/web/public/uploads/...
+   - /api/uploads vs /uploads: este era o problema central
+   - pasta inexistente: nao; teste real confirmou criacao e leitura do arquivo
+8. Nginx: o exemplo agora explicita location ^~ /api/uploads/ para o backend e preserva location ^~ /uploads/ apenas para compatibilidade.
+
+ARQUIVOS AFETADOS E CORRIGIDOS
+- apps/api/src/utils/property-images.ts
+- apps/web/app/api/admin/uploads/route.ts
+- apps/web/lib/admin.ts
+- apps/web/lib/api.ts
+- apps/web/lib/image.ts
+- apps/api/src/routes/posts.ts
+- deploy/nginx/imoveis.munay.com.br.conf.example
+- apps/web/lib/app-release.ts
+- apps/api/src/routes/dashboard.ts (ajuste adicional de tipagem para garantir build limpo do backend)
+
+CORRECAO APLICADA
+1. Canonizacao definitiva de URLs de upload para /api/uploads/...
+2. Persistencia de imagens de imoveis agora retorna /api/uploads/properties/...
+3. Upload administrativo agora retorna /api/uploads/{folder}/...
+4. Frontend admin e publico agora normalizam tanto /uploads/... quanto /api/uploads/... para /api/uploads/...
+5. Helper de imagens da galeria tambem normaliza para /api/uploads/...
+6. Backend continua servindo /api/uploads e /uploads para compatibilidade retroativa
+7. Exemplo de Nginx atualizado para expor explicitamente /api/uploads
+8. Mantida a conversao JPG/PNG -> WEBP na persistencia de fotos de imoveis
+9. Mantida a correcao do erro Number must be greater than 0 para campos opcionais
+
+TESTES REALIZADOS
+1. Compilacao do backend: OK
+2. Build/typecheck do frontend: OK
+3. Teste real de persistencia de imagem:
+   - URL gerada: /api/uploads/properties/2026/06/1781415429884-6b729c9c-536e-475c-9018-ec2753ef90f4.webp
+   - Arquivo salvo no disco: OK
+   - GET /api/uploads/...: 200 image/webp
+   - GET /uploads/...: 200 image/webp
+4. Validacao funcional da cadeia URL -> disco -> servidor: OK
+
+CONFIRMACAO FINAL
+Com a correcao aplicada, uma imagem enviada passa a:
+1. ser convertida/persistida corretamente em WEBP no destino fisico apps/web/public/uploads/properties/{ano}/{mes}/arquivo.webp
+2. ser registrada/retornada com URL publica canonica /api/uploads/properties/{ano}/{mes}/arquivo.webp
+3. ser lida corretamente pelo frontend publico e pelo admin
+4. continuar acessivel tambem por /uploads/... apenas para compatibilidade com registros antigos

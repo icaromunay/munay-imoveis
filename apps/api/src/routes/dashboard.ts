@@ -6,7 +6,27 @@ import { asyncHandler } from '../utils/async-handler.js';
 
 const router = Router();
 
-function buildDashboardFallback() {
+type DashboardPayload = {
+  properties: number;
+  developments: number;
+  owners: number;
+  posts: number;
+  testimonials: number;
+  leads: number;
+  featured: number;
+  launches: number;
+  pendingApproval: number;
+  totalViews: number;
+  mostViewedProperty: Record<string, unknown> | null;
+  topViewedProperties: Array<Record<string, unknown>>;
+  last7dViews: number;
+  last30dViews: number;
+  recentProperties: Array<Record<string, unknown>>;
+  recentLeads: Array<Record<string, unknown>>;
+  recentAccesses: Array<Record<string, unknown>>;
+};
+
+function buildDashboardFallback(): DashboardPayload {
   return {
     properties: 0,
     developments: 0,
@@ -28,7 +48,7 @@ function buildDashboardFallback() {
   };
 }
 
-let lastDashboardPayload: ReturnType<typeof buildDashboardFallback> | null = null;
+let lastDashboardPayload: DashboardPayload | null = null;
 
 router.get(
   '/',
@@ -152,7 +172,7 @@ router.get(
       viewCount: item.viewCount || 0
     }));
 
-      const payload = {
+      const payload: DashboardPayload = {
         properties,
         developments,
         owners: ownerRows.length,

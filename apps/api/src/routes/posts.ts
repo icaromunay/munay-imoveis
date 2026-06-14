@@ -15,6 +15,7 @@ const coverImageSchema = z
   .trim()
   .refine((value) => {
     if (value.startsWith('/uploads/')) return true;
+    if (value.startsWith('/api/uploads/')) return true;
 
     try {
       const parsed = new URL(value);

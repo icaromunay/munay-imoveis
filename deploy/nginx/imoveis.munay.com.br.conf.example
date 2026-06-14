@@ -72,11 +72,16 @@ server {
         proxy_pass http://munay_web;
     }
 
+    location ^~ /api/uploads/ {
+        proxy_pass http://munay_api;
+    }
+
     # CRÍTICO: sem barra final no proxy_pass
     location ^~ /api/ {
         proxy_pass http://munay_api;
     }
 
+    # Compatibilidade com URLs legadas já salvas no banco.
     location ^~ /uploads/ {
         proxy_pass http://munay_api;
     }

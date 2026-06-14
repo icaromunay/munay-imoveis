@@ -50,13 +50,14 @@ function logFrontendFetch(path: string, duration: number, status: 'ok' | 'fallba
 
 function normalizeUploadUrls<T>(payload: T): T {
   if (typeof payload === 'string') {
-    if (payload.startsWith('/uploads/')) {
-      return `/api${payload}` as T;
+    if (payload.startsWith('/uploads/') || payload.startsWith('/api/uploads/')) {
+      const suffix = payload.replace(/^\/(?:api\/)?uploads\/+/, '');
+      return `/api/uploads/${suffix}`.replace(/\/+/g, '/') as T;
     }
 
     return payload
-      .replace(/src=(["'])\/uploads\//g, 'src=$1/api/uploads/')
-      .replace(/href=(["'])\/uploads\//g, 'href=$1/api/uploads/') as T;
+      .replace(/src=(["'])\/(?:api\/)?uploads\/+?/g, 'src=$1/api/uploads/')
+      .replace(/href=(["'])\/(?:api\/)?uploads\/+?/g, 'href=$1/api/uploads/') as T;
   }
 
   if (Array.isArray(payload)) {

@@ -10,6 +10,19 @@ type ImageItem = {
 };
 
 const uploadsRoot = fileURLToPath(new URL('../../../web/public/uploads/properties/', import.meta.url));
+const CANONICAL_UPLOADS_PREFIX = '/api/uploads/';
+
+function normalizeStoredUploadUrl(value: string) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return trimmed;
+
+  if (trimmed.startsWith('/uploads/') || trimmed.startsWith('/api/uploads/')) {
+    const suffix = trimmed.replace(/^\/(?:api\/)?uploads\/+/, '');
+    return `${CANONICAL_UPLOADS_PREFIX}${suffix}`.replace(/\/+/g, '/');
+  }
+
+  return trimmed;
+}
 
 function getInputBuffer(value: string) {
   const match = value.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s);
@@ -72,12 +85,16 @@ async function optimizeAndPersistImageData(value: string) {
 
   await Promise.all([writeFile(mainPath, mainBuffer), writeFile(thumbPath, thumbBuffer)]);
 
-  return `/api/uploads/properties/${year}/${month}/${mainFileName}`;
+  return normalizeStoredUploadUrl(`/uploads/properties/${year}/${month}/${mainFileName}`);
 }
 
 export async function persistImageValue(value?: string | null) {
-  if (!value || !value.startsWith('data:image/')) {
-    return value || null;
+  if (!value) {
+    return null;
+  }
+
+  if (!value.startsWith('data:image/')) {
+    return normalizeStoredUploadUrl(value);
   }
 
   return optimizeAndPersistImageData(value);
