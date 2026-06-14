@@ -388,7 +388,10 @@ async function normalizePropertyInput(data: PropertyInput, existingCode?: string
       : data.status;
   const resolvedImages = data.images.length ? data.images : data.coverImage ? [{ url: data.coverImage, alt: data.title }] : [];
   const persistedImages = await persistPropertyImages(resolvedImages);
-  const resolvedCover = (await persistImageValue(data.coverImage || persistedImages[0]?.url)) || persistedImages[0]?.url;
+  const coverIndex = resolvedImages.findIndex((image) => image.url === data.coverImage);
+  const resolvedCover = coverIndex >= 0
+    ? persistedImages[coverIndex]?.url
+    : (await persistImageValue(data.coverImage || persistedImages[0]?.url)) || persistedImages[0]?.url;
   const sanitizedFullDescription = sanitizeRichTextHtml(data.fullDescription);
 
   if (!resolvedCover) {

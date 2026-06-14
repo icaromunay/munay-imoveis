@@ -7,7 +7,7 @@ import { requireAdminRoute } from '@/lib/admin-route';
 const uploadSchema = z.object({
   dataUrl: z.string().trim().min(20, 'Imagem inválida.'),
   fileName: z.string().trim().min(1).default('imagem'),
-  folder: z.enum(['blog-cover', 'editor', 'property-description', 'property-gallery']).default('editor'),
+  folder: z.enum(['blog-cover', 'editor', 'property-description']).default('editor'),
   width: z.coerce.number().int().positive().optional(),
   height: z.coerce.number().int().positive().optional()
 });
@@ -59,15 +59,16 @@ function parseDataUrl(dataUrl: string) {
   };
 }
 
-function resolveUploadsDirectory() {
-  const directPublic = path.join(process.cwd(), 'public');
-  const monorepoPublic = path.join(process.cwd(), 'apps', 'web', 'public');
+function resolveUploadsDirectories() {
+  const cwd = process.cwd();
+  const candidates = [
+    path.join(cwd, 'public'),
+    path.join(cwd, 'apps', 'web', 'public'),
+    path.join(cwd, '.next', 'standalone', 'apps', 'web', 'public'),
+    path.join(cwd, 'standalone', 'apps', 'web', 'public')
+  ];
 
-  if (path.basename(process.cwd()) === 'web') {
-    return directPublic;
-  }
-
-  return monorepoPublic;
+  return Array.from(new Set(candidates));
 }
 
 export async function POST(request: Request) {
@@ -88,15 +89,19 @@ export async function POST(request: Request) {
     const now = new Date();
     const year = String(now.getFullYear());
     const month = String(now.getMonth() + 1).padStart(2, '0');
-    const publicRoot = resolveUploadsDirectory();
-    const targetDirectory = path.join(publicRoot, 'uploads', folder, year, month);
+    const publicRoots = resolveUploadsDirectories();
     const safeBaseName = sanitizeBaseName(fileName);
     const finalFileName = `${Date.now()}-${crypto.randomUUID()}-${safeBaseName}.${extension}`;
-    const diskPath = path.join(targetDirectory, finalFileName);
     const publicUrl = `/uploads/${folder}/${year}/${month}/${finalFileName}`;
 
-    await mkdir(targetDirectory, { recursive: true });
-    await writeFile(diskPath, buffer);
+    await Promise.all(
+      publicRoots.map(async (publicRoot) => {
+        const targetDirectory = path.join(publicRoot, 'uploads', folder, year, month);
+        const diskPath = path.join(targetDirectory, finalFileName);
+        await mkdir(targetDirectory, { recursive: true });
+        await writeFile(diskPath, buffer);
+      })
+    );
 
     return jsonResponse({
       url: publicUrl,

@@ -1,0 +1,15 @@
+Pacote 15.3 — correção definitiva da galeria de imóveis
+
+Principais ajustes:
+- A galeria do imóvel voltou a usar pré-visualização local no admin.
+- As fotos do anúncio agora só são persistidas no backend ao salvar o imóvel.
+- O fluxo dedicado /api/admin/uploads ficou restrito a blog-cover, editor e property-description.
+- O backend reaproveita a imagem persistida da galeria como capa quando ela já corresponde à primeira foto, evitando gravação duplicada.
+- Mantidos os fallbacks de leitura da API da 15.2 para imóveis, dashboard e blog.
+
+Arquivos alterados:
+- apps/web/app/admin/properties/incluir/page.tsx
+- apps/web/app/api/admin/uploads/route.ts
+- apps/web/lib/admin-media.ts
+- apps/api/src/routes/properties.ts
+- apps/web/lib/app-release.ts

@@ -21,7 +21,7 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { adminFetch } from '@/lib/admin';
 import { prepareAndUploadAdminImage } from '@/lib/admin-media';
-import { PreparedImage } from '@/lib/image-upload';
+import { prepareImageFile, PreparedImage } from '@/lib/image-upload';
 import { Property } from '@/lib/types';
 import { categoryLabel, formatCurrency, statusLabel } from '@/lib/format';
 import {
@@ -159,6 +159,33 @@ function getRichTextPlainText(value: string) {
     .trim();
 }
 
+function ensureImageUrlLoads(url: string) {
+  return new Promise<void>((resolve, reject) => {
+    if (typeof window === 'undefined') {
+      resolve();
+      return;
+    }
+
+    const image = new window.Image();
+    const timeoutId = window.setTimeout(() => {
+      image.src = '';
+      reject(new Error('A imagem enviada não ficou acessível no servidor.'));
+    }, 8000);
+
+    image.onload = () => {
+      window.clearTimeout(timeoutId);
+      resolve();
+    };
+
+    image.onerror = () => {
+      window.clearTimeout(timeoutId);
+      reject(new Error('A imagem enviada não ficou acessível no servidor.'));
+    };
+
+    image.src = `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`;
+  });
+}
+
 function isKnownTypeOption(value: string) {
   return PROPERTY_TYPE_OPTIONS.some((option) => option.value === value);
 }
@@ -266,6 +293,7 @@ export default function AdminPropertiesPage() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [imagePreviews, setImagePreviews] = useState<PreparedImage[]>([]);
+  const [brokenImageIds, setBrokenImageIds] = useState<string[]>([]);
   const [filters, setFilters] = useState(defaultFilters);
 
   const imageCountLabel = useMemo(() => `${imagePreviews.length}/20 fotos`, [imagePreviews.length]);
@@ -491,6 +519,7 @@ export default function AdminPropertiesPage() {
   function resetForm() {
     setForm(emptyForm);
     setImagePreviews([]);
+    setBrokenImageIds([]);
     setUploadProgress(null);
     setEditingId(null);
   }
@@ -516,31 +545,25 @@ export default function AdminPropertiesPage() {
 
       for (let index = 0; index < selectedFiles.length; index += 1) {
         const file = selectedFiles[index];
-        setUploadProgress({
-          percent: Math.max(1, Math.round((index / selectedFiles.length) * 100)),
-          current: index + 1,
-          total: selectedFiles.length,
-          currentFile: file.name,
-          stage: 'Otimizando e enviando para a biblioteca interna'
+        const prepared = await prepareImageFile(file, (progress) => {
+          setUploadProgress({
+            percent: progress.percent,
+            current: index + 1,
+            total: selectedFiles.length,
+            currentFile: progress.fileName,
+            stage: progress.stage
+          });
         });
 
-        const uploaded = await prepareAndUploadAdminImage(file, 'property-gallery');
-        uploadedImages.push({
-          id: crypto.randomUUID(),
-          url: uploaded.url,
-          name: file.name,
-          format: uploaded.contentType.includes('webp') ? 'webp' : uploaded.contentType.includes('jpeg') || uploaded.contentType.includes('jpg') ? 'jpg' : 'original',
-          width: uploaded.width,
-          height: uploaded.height,
-          sizeKb: 0
-        });
+        await ensureImageUrlLoads(prepared.url);
+        uploadedImages.push(prepared);
 
         setUploadProgress({
           percent: Math.max(1, Math.min(100, Math.round(((index + 1) / selectedFiles.length) * 100))),
           current: index + 1,
           total: selectedFiles.length,
           currentFile: file.name,
-          stage: 'Imagem persistida com sucesso'
+          stage: 'Prévia pronta para salvar no imóvel'
         });
       }
 
@@ -550,9 +573,10 @@ export default function AdminPropertiesPage() {
         current: selectedFiles.length,
         total: selectedFiles.length,
         currentFile: selectedFiles[selectedFiles.length - 1]?.name || '',
-        stage: 'Upload concluído e persistido'
+        stage: 'Pré-visualização concluída'
       });
-      setMessage(`${Math.min(files.length, remainingSlots)} foto(s) enviada(s) e persistida(s) com sucesso.`);
+      setBrokenImageIds([]);
+      setMessage(`${Math.min(files.length, remainingSlots)} foto(s) preparada(s) com sucesso. As imagens serão persistidas no servidor ao salvar o imóvel.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível enviar as imagens.');
       setUploadProgress(null);
@@ -564,6 +588,7 @@ export default function AdminPropertiesPage() {
 
   function removeImage(id: string) {
     setImagePreviews((current) => current.filter((image) => image.id !== id));
+    setBrokenImageIds((current) => current.filter((item) => item !== id));
   }
 
   function moveImage(id: string, direction: 'up' | 'down') {
@@ -656,6 +681,7 @@ export default function AdminPropertiesPage() {
         sizeKb: 0
       }))
     );
+    setBrokenImageIds([]);
     if (shouldScroll) window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -689,6 +715,24 @@ export default function AdminPropertiesPage() {
       if (!trimmedCity || trimmedCity.length < 2) throw new Error('Informe a cidade do imóvel.');
       if (!trimmedDistrict || trimmedDistrict.length < 2) throw new Error('Informe o bairro do imóvel.');
       if (!imagePreviews.length) throw new Error('Envie pelo menos uma foto para publicar o imóvel.');
+      if (brokenImageIds.length) throw new Error('Existe pelo menos uma foto quebrada na galeria. Remova a imagem com erro e envie novamente antes de salvar.');
+      const inaccessibleImages = (
+        await Promise.all(
+          imagePreviews.map(async (image) => {
+            if (image.url.startsWith('data:image/')) {
+              return null;
+            }
+
+            try {
+              await ensureImageUrlLoads(image.url);
+              return null;
+            } catch {
+              return image.name;
+            }
+          })
+        )
+      ).filter(Boolean);
+      if (inaccessibleImages.length) throw new Error(`As seguintes fotos não ficaram acessíveis após o upload: ${inaccessibleImages.join(', ')}.`);
       if (hasInvalidPropertyVideo) throw new Error('Informe um link válido do YouTube para o vídeo do imóvel.');
       if (form.acceptsDirectInstallments && !toNumericValue(form.maxDirectInstallments)) throw new Error('Informe a quantidade máxima de parcelas do parcelamento direto.');
       if (form.hasDevelopmentInstallments && !toNumericValue(form.developmentMaxInstallments)) throw new Error('Informe a quantidade máxima de parcelas da loteadora.');
@@ -1144,19 +1188,29 @@ export default function AdminPropertiesPage() {
 
             {imagePreviews.length ? (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {imagePreviews.map((image, index) => (
+                {imagePreviews.map((image, index) => {
+                  const isBroken = brokenImageIds.includes(image.id);
+
+                  return (
                   <div key={image.id} className="surface-muted overflow-hidden p-3">
                     <div className="relative aspect-[4/3] overflow-hidden rounded-[1.1rem] bg-black/20">
-                      <img src={image.url} alt={image.name} className="h-full w-full object-cover" />
+                      <img
+                        src={image.url}
+                        alt={image.name}
+                        className="h-full w-full object-cover"
+                        onLoad={() => setBrokenImageIds((current) => current.filter((item) => item !== image.id))}
+                        onError={() => setBrokenImageIds((current) => (current.includes(image.id) ? current : [...current, image.id]))}
+                      />
                       {index === 0 ? <span className="absolute left-3 top-3 rounded-full bg-brand-gold px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#08110d]">Capa</span> : null}
                     </div>
-                    <div className="mt-3 space-y-1 text-xs text-zinc-400">
+                    <div className={`mt-3 space-y-1 text-xs ${isBroken ? 'text-rose-300' : 'text-zinc-400'}`}>
                       <p className="truncate text-sm text-white">{image.name}</p>
                       <p>{image.originalFormat === 'webp' ? 'WEBP preservado e otimizado' : 'Convertido automaticamente para WEBP'}{image.optimizedSizeKb ? ` • ${image.optimizedSizeKb} KB` : image.sizeKb ? ` • ${image.sizeKb} KB` : ''}</p>
                       {image.originalSizeKb ? <p>Original: {image.originalSizeKb} KB • Final: {image.optimizedSizeKb || image.sizeKb} KB</p> : null}
                       {image.thumbnailSizeKb ? <p>Miniatura automática: {image.thumbnailSizeKb} KB • 400px WEBP</p> : null}
                       {typeof image.compressionRatio === 'number' ? <p>Redução estimada: {image.compressionRatio}%</p> : null}
                       {image.width && image.height ? <p>Imagem principal: {image.width} × {image.height}px • máx. 1920px</p> : null}
+                      {isBroken ? <p className="font-medium text-rose-300">Falha ao carregar esta foto no servidor. Remova e envie novamente.</p> : null}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={() => moveImage(image.id, 'up')} disabled={index === 0} className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-2 text-xs text-white transition hover:border-brand-gold hover:text-brand-gold disabled:cursor-not-allowed disabled:opacity-40"><ChevronUp size={14} />Subir</button>
@@ -1164,7 +1218,7 @@ export default function AdminPropertiesPage() {
                       <button type="button" onClick={() => removeImage(image.id)} className="inline-flex items-center gap-1 rounded-full border border-rose-500/30 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/10"><Trash2 size={14} />Remover</button>
                     </div>
                   </div>
-                ))}
+                );})}
               </div>
             ) : (
               <div className="surface-muted flex items-center gap-3 p-4 text-sm text-zinc-400"><ImagePlus size={18} className="text-brand-gold" />Nenhuma foto enviada ainda.</div>
@@ -1186,8 +1240,9 @@ export default function AdminPropertiesPage() {
           </section>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button disabled={loading || uploadingImages} type="submit" className="btn-primary px-6 py-3 disabled:opacity-60">{loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{editingId ? 'Atualizar imóvel' : 'Salvar imóvel'}</button>
+            <button disabled={loading || uploadingImages || brokenImageIds.length > 0} type="submit" className="btn-primary px-6 py-3 disabled:opacity-60">{loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{editingId ? 'Atualizar imóvel' : 'Salvar imóvel'}</button>
             <button type="button" onClick={resetForm} className="btn-secondary px-6 py-3">Limpar formulário</button>
+            {brokenImageIds.length ? <p className="text-sm text-rose-400">Há foto(s) quebrada(s) na galeria. O salvamento fica bloqueado até reenviar ou remover.</p> : null}
             {message ? <p className="text-sm text-emerald-400">{message}</p> : null}
             {error ? <p className="text-sm text-rose-400">{error}</p> : null}
           </div>
