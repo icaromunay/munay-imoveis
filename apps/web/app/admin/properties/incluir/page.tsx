@@ -20,7 +20,7 @@ import {
 import { AdminShell } from '@/components/admin/AdminShell';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { adminFetch } from '@/lib/admin';
-import { prepareAndUploadAdminImage } from '@/lib/admin-media';
+import { prepareAndUploadAdminImage, uploadPreparedAdminImage } from '@/lib/admin-media';
 import { prepareImageFile, PreparedImage } from '@/lib/image-upload';
 import { Property } from '@/lib/types';
 import { categoryLabel, formatCurrency, statusLabel } from '@/lib/format';
@@ -555,15 +555,28 @@ export default function AdminPropertiesPage() {
           });
         });
 
-        await ensureImageUrlLoads(prepared.url);
-        uploadedImages.push(prepared);
+        setUploadProgress({
+          percent: 85,
+          current: index + 1,
+          total: selectedFiles.length,
+          currentFile: file.name,
+          stage: 'Persistindo foto na biblioteca do imóvel'
+        });
+
+        const uploaded = await uploadPreparedAdminImage(prepared, 'property-gallery');
+        await ensureImageUrlLoads(uploaded.url);
+        uploadedImages.push({
+          ...prepared,
+          url: uploaded.url,
+          name: file.name
+        });
 
         setUploadProgress({
           percent: Math.max(1, Math.min(100, Math.round(((index + 1) / selectedFiles.length) * 100))),
           current: index + 1,
           total: selectedFiles.length,
           currentFile: file.name,
-          stage: 'Prévia pronta para salvar no imóvel'
+          stage: 'Imagem persistida com sucesso'
         });
       }
 
@@ -573,10 +586,10 @@ export default function AdminPropertiesPage() {
         current: selectedFiles.length,
         total: selectedFiles.length,
         currentFile: selectedFiles[selectedFiles.length - 1]?.name || '',
-        stage: 'Pré-visualização concluída'
+        stage: 'Upload concluído'
       });
       setBrokenImageIds([]);
-      setMessage(`${Math.min(files.length, remainingSlots)} foto(s) preparada(s) com sucesso. As imagens serão persistidas no servidor ao salvar o imóvel.`);
+      setMessage(`${Math.min(files.length, remainingSlots)} foto(s) enviada(s), validadas e persistida(s) com sucesso.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível enviar as imagens.');
       setUploadProgress(null);

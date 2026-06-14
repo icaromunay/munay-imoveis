@@ -1,0 +1,34 @@
+[prisma] 365ms SELECT "public"."Property"."id", "public"."Property"."propertyCode" FROM "public"."Property" WHERE "public"."Property"."
+[prisma] 364ms INSERT INTO "public"."Property" ("id","title","slug","shortDescription","fullDescription","price","promotionalPrice","st
+[prisma] 364ms INSERT INTO "public"."PropertyImage" ("propertyId","url","id","alt","sortOrder") VALUES ($1,$2,$3,$4,$5), ($6,$7,$8,$9,$
+[prisma] 364ms SELECT "public"."Property"."id", "public"."Property"."title", "public"."Property"."slug", "public"."Property"."shortDesc
+[prisma] 364ms SELECT "public"."PropertyImage"."id", "public"."PropertyImage"."propertyId", "public"."PropertyImage"."url", "public"."P
+[api] POST /api/properties -> 201 3371.5ms
+[0mPOST /api/properties [32m201[0m 3364.451 ms - 2246[0m
+[prisma] 452ms SELECT "public"."SiteSetting"."id", "public"."SiteSetting"."indexNowKey" FROM "public"."SiteSetting" WHERE 1=1 LIMIT $1 
+[revalidate] sucesso target=http://localhost:3000 attempt=1/2 paths=8 duration=940ms
+[prisma] 355ms SELECT "public"."Property"."id", "public"."Property"."title", "public"."Property"."slug", "public"."Property"."shortDesc
+[prisma] 355ms SELECT "public"."PropertyImage"."id", "public"."PropertyImage"."propertyId", "public"."PropertyImage"."url", "public"."P
+[prisma] 355ms SELECT "public"."Property"."id", "public"."Property"."title", "public"."Property"."slug", "public"."Property"."shortDesc
+[prisma] 356ms SELECT "public"."Property"."id", "public"."Property"."title", "public"."Property"."slug", "public"."Property"."shortDesc
+[prisma] 354ms SELECT "public"."PropertyImage"."id", "public"."PropertyImage"."propertyId", "public"."PropertyImage"."url", "public"."P
+[api] GET /api/properties/teste-upload-1781416691387-casa-de-teste-ca002 -> 200 3131.49ms
+[0mGET /api/properties/teste-upload-1781416691387-casa-de-teste-ca002 [32m200[0m 3130.910 ms - 8508[0m
+[prisma] 355ms SELECT "public"."Property"."id", "public"."Property"."title", "public"."Property"."slug", "public"."Property"."shortDesc
+{
+  "createStatus": 201,
+  "publicStatus": 200,
+  "createdId": "cmqddi5ey0000eoira6semb3k",
+  "createdSlug": "teste-upload-1781416691387-casa-de-teste-ca002",
+  "createCoverImage": "/api/uploads/properties/2026/06/1781416692939-9eddfaf7-9656-4219-a249-c464d8c351ae.webp",
+  "createImagesCount": 2,
+  "publicCoverImage": "/api/uploads/properties/2026/06/1781416692939-9eddfaf7-9656-4219-a249-c464d8c351ae.webp",
+  "publicImagesCount": 2,
+  "firstImageUrl": "/api/uploads/properties/2026/06/1781416692939-9eddfaf7-9656-4219-a249-c464d8c351ae.webp",
+  "firstImageFetchStatus": 200,
+  "firstImageContentType": "image/webp",
+  "dbCoverImage": "/api/uploads/properties/2026/06/1781416692939-9eddfaf7-9656-4219-a249-c464d8c351ae.webp",
+  "dbImagesCount": 2,
+  "dbFirstImageUrl": "/api/uploads/properties/2026/06/1781416692939-9eddfaf7-9656-4219-a249-c464d8c351ae.webp"
+}
+[prisma] 357ms DELETE FROM "public"."Property" WHERE ("public"."Property"."id" = $1 AND 1=1) RETURNING "public"."Property"."id", "publi

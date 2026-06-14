@@ -1,6 +1,6 @@
 import { prepareImageFile } from '@/lib/image-upload';
 
-export type AdminMediaFolder = 'blog-cover' | 'editor' | 'property-description';
+export type AdminMediaFolder = 'blog-cover' | 'editor' | 'property-description' | 'property-gallery';
 
 export type UploadedAdminImage = {
   url: string;

@@ -1,0 +1,51 @@
+VERSAO: 15.7
+DATA: 2026-06-14 03:10:00 UTC
+
+O QUE MUDEI NESTA VERSAO
+1. A galeria do cadastro/edição de imóvel voltou a persistir cada foto no servidor no exato momento da seleção.
+2. O admin não depende mais de previews temporários em base64 para fotos da galeria do imóvel.
+3. Depois de selecionar a imagem, o admin já recebe uma URL real em /api/uploads/properties/..., usa essa URL na prévia, e depois salva o imóvel referenciando essas URLs já persistidas.
+4. Isso permite editar, reordenar, remover e substituir fotos de forma consistente, inclusive ao reabrir a edição do imóvel.
+
+CAUSA MAIS PROVAVEL DO PROBLEMA ANTERIOR
+As versões anteriores ainda deixavam o fluxo da galeria dependente, em algum ponto, de previews temporários/base64 até o momento do save. Mesmo com os ajustes de caminho, isso ainda podia falhar no seu ambiente durante o cadastro/edição, especialmente quando o admin precisava reabrir, trocar ou validar imagens. Nesta 15.7, a foto deixa de ser apenas preview local e passa a existir fisicamente no servidor logo na seleção.
+
+CORRECOES APLICADAS
+- apps/web/app/admin/properties/incluir/page.tsx
+  Agora cada foto da galeria é:
+  a) preparada no navegador
+  b) enviada imediatamente para a biblioteca interna do imóvel
+  c) validada por URL real do servidor
+  d) adicionada à galeria do formulário já com URL persistida
+
+- apps/web/lib/admin-media.ts
+  Reintroduzido o tipo property-gallery para upload administrativo.
+
+- apps/web/app/api/admin/uploads/route.ts
+  O upload administrativo agora aceita property-gallery e mapeia esse tipo diretamente para a pasta publica canonical properties.
+  Resultado: a URL retornada para galeria de imóvel fica em /api/uploads/properties/{ano}/{mes}/{arquivo}.
+
+- apps/web/lib/app-release.ts
+  Atualizado para APP_VERSION 15.7.
+
+CORRECOES ANTERIORES MANTIDAS
+- Caminho canônico das mídias em /api/uploads
+- Compatibilidade legada com /uploads
+- Correção de campos numéricos opcionais para evitar Number must be greater than 0
+- Backend continua servindo uploads corretamente
+
+TESTES REALIZADOS
+1. Build do backend: OK
+2. Build/typecheck do frontend: OK
+3. Teste ponta a ponta da API de imóveis: OK
+   Resultado salvo em TESTE-E2E-15.7.json
+   Confirma:
+   - imóvel criado com status 201
+   - imóvel público lido com status 200
+   - coverImage salvo como /api/uploads/properties/...
+   - images[] salvo com 2 entradas
+   - imagem buscada por HTTP com status 200 e content-type image/webp
+   - banco com coverImage e images coerentes
+
+OBSERVACAO DE DEPLOY
+Este pacote inclui o código atualizado e os artefatos de build gerados nesta versão. Após publicar no servidor, reinicie os processos do web e da API para garantir que o ambiente use os arquivos novos.
